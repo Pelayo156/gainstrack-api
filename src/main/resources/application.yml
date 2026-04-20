@@ -1,0 +1,15 @@
+spring:
+  application:
+    name: gainstrack-api
+  profiles:
+    active: dev # Perfil por defecto al correr localmente
+  threads: # Virtual Threads
+    virtual:
+      enabled: true
+
+server:
+  port: 8080
+
+jwt:
+  secret: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
+  expiration: 2592000000 # 24 horas en milisegundos
