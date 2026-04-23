@@ -1,3 +1,8 @@
 package com.molina.gainstrack.api.dto;
 
-public record GymRequest(String name, Boolean isPrimary) {}
+/**
+ * DTO de entrada para la creación de un gimnasio.
+ *
+ * @param name nombre o apodo del gimnasio
+ */
+public record GymRequest(String name) {}

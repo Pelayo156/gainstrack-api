@@ -1,45 +1,91 @@
 package com.molina.gainstrack.api.service;
 
+import com.molina.gainstrack.api.dto.GymRequest;
 import com.molina.gainstrack.api.dto.GymResponse;
 import com.molina.gainstrack.api.model.User;
 import com.molina.gainstrack.api.repository.GymRepository;
+import com.molina.gainstrack.api.repository.UserRepository;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.Objects;
 
+/**
+ * Servicio que maneja la lógica de negocio para la gestión de gimnasios.
+ * Obtiene el usuario autenticado desde el contexto de seguridad de Spring
+ * para garantizar que cada operación esté acotada al usuario en sesión.
+ */
 @Service
 public class GymService {
 
     private final GymRepository gymRepository;
-    private final AuthService authService;
+    private final UserRepository userRepository;
 
-    public GymService(GymRepository gymRepository, AuthService authService) {
+    /**
+     * @param gymRepository  repositorio de acceso a datos de gimnasios
+     * @param userRepository repositorio de acceso a datos de usuarios
+     */
+    public GymService(GymRepository gymRepository, UserRepository userRepository) {
         this.gymRepository = gymRepository;
-        this.authService = authService;
+        this.userRepository = userRepository;
     }
 
-    public GymResponse save(String name) {
-        if (!SecurityContextHolder.getContext().getAuthentication().isAuthenticated()) {
-            throw new RuntimeException("User is not authenticated");
-        }
-
-        String userEmail = SecurityContextHolder.getContext().getAuthentication().getName();
-        User user = authService.findByEmail(userEmail)
-                               .orElseThrow(() -> new RuntimeException("Authenticated user not found"));
-        return gymRepository.save(userId, name);
+    /**
+     * Crea un nuevo gimnasio para el usuario autenticado.
+     *
+     * @param request datos del gimnasio a crear
+     * @return GymResponse con los datos del gimnasio creado
+     * @throws RuntimeException si el usuario autenticado no existe en la base de datos
+     */
+    public GymResponse save(GymRequest request) {
+        User user = this.getAuthenticatedUser();
+        return gymRepository.save(user.getId(), request.name());
     }
 
-    public List<GymResponse> findAll(Long userId) {
-        return gymRepository.findAll(userId);
+    /**
+     * Retorna todos los gimnasios del usuario autenticado.
+     *
+     * @return lista de gimnasios del usuario en sesión
+     * @throws RuntimeException si el usuario autenticado no existe en la base de datos
+     */
+    public List<GymResponse> findAll() {
+        User user = this.getAuthenticatedUser();
+        return gymRepository.findAll(user.getId());
     }
 
-    public void setPrimary(Long id, Long userId) {
-        gymRepository.setPrimary(id, userId);
+    /**
+     * Marca un gimnasio como principal para el usuario autenticado.
+     * Delega al repositorio la lógica de desmarcar el anterior
+     * y marcar el nuevo en una operación secuencial.
+     *
+     * @param id id del gimnasio a marcar como principal
+     * @throws RuntimeException si el usuario autenticado no existe en la base de datos
+     */
+    public void setPrimary(Long id) {
+        User user = this.getAuthenticatedUser();
+        gymRepository.setPrimary(id, user.getId());
     }
 
+    /**
+     * Elimina un gimnasio por su id.
+     * Por el CASCADE del modelo relacional, se eliminarán también
+     * todas las sesiones asociadas a este gimnasio.
+     *
+     * @param id id del gimnasio a eliminar
+     */
     public void deleteById(Long id) {
         gymRepository.deleteById(id);
+    }
+
+    /**
+     * Obtiene el usuario autenticado desde el contexto de seguridad.
+     *
+     * @return User correspondiente al JWT en curso
+     * @throws RuntimeException si el usuario no existe en la base de datos
+     */
+    private User getAuthenticatedUser() {
+        String email = SecurityContextHolder.getContext().getAuthentication().getName();
+        return userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
     }
 }
