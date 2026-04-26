@@ -4,8 +4,7 @@ import com.molina.gainstrack.api.dto.GymRequest;
 import com.molina.gainstrack.api.dto.GymResponse;
 import com.molina.gainstrack.api.model.User;
 import com.molina.gainstrack.api.repository.GymRepository;
-import com.molina.gainstrack.api.repository.UserRepository;
-import org.springframework.security.core.context.SecurityContextHolder;
+import com.molina.gainstrack.api.utils.AuthUtils;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -19,15 +18,15 @@ import java.util.List;
 public class GymService {
 
     private final GymRepository gymRepository;
-    private final UserRepository userRepository;
+    private final AuthUtils authUtils;
 
     /**
      * @param gymRepository  repositorio de acceso a datos de gimnasios
-     * @param userRepository repositorio de acceso a datos de usuarios
+     * @param authUtils componente de acceso a metodo para obtener usuario
      */
-    public GymService(GymRepository gymRepository, UserRepository userRepository) {
+    public GymService(GymRepository gymRepository, AuthUtils authUtils) {
         this.gymRepository = gymRepository;
-        this.userRepository = userRepository;
+        this.authUtils = authUtils;
     }
 
     /**
@@ -38,7 +37,7 @@ public class GymService {
      * @throws RuntimeException si el usuario autenticado no existe en la base de datos
      */
     public GymResponse save(GymRequest request) {
-        User user = this.getAuthenticatedUser();
+        User user = this.authUtils.getAuthenticatedUser();
         return gymRepository.save(user.getId(), request.name());
     }
 
@@ -49,7 +48,7 @@ public class GymService {
      * @throws RuntimeException si el usuario autenticado no existe en la base de datos
      */
     public List<GymResponse> findAll() {
-        User user = this.getAuthenticatedUser();
+        User user = this.authUtils.getAuthenticatedUser();
         return gymRepository.findAll(user.getId());
     }
 
@@ -62,7 +61,7 @@ public class GymService {
      * @throws RuntimeException si el usuario autenticado no existe en la base de datos
      */
     public void setPrimary(Long id) {
-        User user = this.getAuthenticatedUser();
+        User user = this.authUtils.getAuthenticatedUser();
         gymRepository.setPrimary(id, user.getId());
     }
 
@@ -74,18 +73,7 @@ public class GymService {
      * @param id id del gimnasio a eliminar
      */
     public void deleteById(Long id) {
-        gymRepository.deleteById(id);
-    }
-
-    /**
-     * Obtiene el usuario autenticado desde el contexto de seguridad.
-     *
-     * @return User correspondiente al JWT en curso
-     * @throws RuntimeException si el usuario no existe en la base de datos
-     */
-    private User getAuthenticatedUser() {
-        String email = SecurityContextHolder.getContext().getAuthentication().getName();
-        return userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+        User user = this.authUtils.getAuthenticatedUser();
+        gymRepository.deleteById(id, user.getId());
     }
 }

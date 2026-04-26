@@ -85,10 +85,12 @@ public class GymRepository {
      * todas las sesiones de entrenamiento asociadas a este gimnasio.
      *
      * @param id id del gimnasio a eliminar
+     * @param userId id del usuario propietario
      */
-    public void deleteById(Long id) {
-        jdbcClient.sql("DELETE FROM gyms WHERE id = :id")
+    public void deleteById(Long id, Long userId) {
+        jdbcClient.sql("DELETE FROM gyms WHERE id = :id AND user_id = :userId")
                   .param("id", id)
+                  .param("userId", userId)
                   .update();
     }
 }
