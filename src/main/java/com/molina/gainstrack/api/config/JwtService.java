@@ -1,6 +1,7 @@
 package com.molina.gainstrack.api.config;
 
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
@@ -91,7 +92,7 @@ public class JwtService {
      * @return Claims objeto con todos los campos del payload
      * @throws JwtException si el token es inválido, expirado o fue manipulado
      */
-    private Claims extractAllClaims(String token) {
+    private Claims extractAllClaims(String token) throws JwtException {
         return Jwts.parser()
                    .verifyWith(getSignigKey())
                    .build()
