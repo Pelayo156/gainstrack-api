@@ -38,7 +38,7 @@ public class GymRepository {
                   .param("name", name)
                   .update();
 
-        return jdbcClient.sql("SELECT id, user_id, name, is_primary FROM gyms WHERE user_id = :userId ORDER BY id DESC LIMIT 1")
+        return jdbcClient.sql("SELECT id, name, is_primary FROM gyms WHERE user_id = :userId ORDER BY id DESC LIMIT 1")
                 .param("userId", userId)
                 .query(GymResponse.class)
                 .single();
@@ -51,7 +51,7 @@ public class GymRepository {
      * @return lista de gimnasios del usuario
      */
     public List<GymResponse> findAll(Long userId) {
-        return jdbcClient.sql("SELECT id, user_id, name, is_primary FROM gyms WHERE user_id = :userId")
+        return jdbcClient.sql("SELECT id, name, is_primary FROM gyms WHERE user_id = :userId")
                          .param("userId", userId)
                          .query(GymResponse.class)
                          .list();
