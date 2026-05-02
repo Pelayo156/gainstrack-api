@@ -5,6 +5,5 @@ package com.molina.gainstrack.api.dto;
  *
  * @param id        identificador único del gimnasio
  * @param name      nombre o apodo del gimnasio
- * @param isPrimary indica si es el gimnasio principal del usuario
  */
-public record GymResponse(Long id, String name, Boolean isPrimary) {}
+public record GymResponse(Long id, String name) {}

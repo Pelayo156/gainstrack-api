@@ -53,19 +53,6 @@ public class GymService {
     }
 
     /**
-     * Marca un gimnasio como principal para el usuario autenticado.
-     * Delega al repositorio la lógica de desmarcar el anterior
-     * y marcar el nuevo en una operación secuencial.
-     *
-     * @param id id del gimnasio a marcar como principal
-     * @throws RuntimeException si el usuario autenticado no existe en la base de datos
-     */
-    public void setPrimary(Long id) {
-        User user = this.authUtils.getAuthenticatedUser();
-        gymRepository.setPrimary(id, user.getId());
-    }
-
-    /**
      * Elimina un gimnasio por su id.
      * Por el CASCADE del modelo relacional, se eliminarán también
      * todas las sesiones asociadas a este gimnasio.

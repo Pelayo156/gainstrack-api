@@ -33,12 +33,12 @@ public class GymRepository {
      * @return GymResponse con los datos del gimnasio recién creado
      */
     public GymResponse save(Long userId, String name) {
-        jdbcClient.sql("INSERT INTO gyms (user_id, name, is_primary) VALUES (:userId, :name, FALSE)")
+        jdbcClient.sql("INSERT INTO gyms (user_id, name) VALUES (:userId, :name)")
                   .param("userId", userId)
                   .param("name", name)
                   .update();
 
-        return jdbcClient.sql("SELECT id, name, is_primary FROM gyms WHERE user_id = :userId ORDER BY id DESC LIMIT 1")
+        return jdbcClient.sql("SELECT id, name FROM gyms WHERE user_id = :userId ORDER BY id DESC LIMIT 1")
                 .param("userId", userId)
                 .query(GymResponse.class)
                 .single();
@@ -51,32 +51,10 @@ public class GymRepository {
      * @return lista de gimnasios del usuario
      */
     public List<GymResponse> findAll(Long userId) {
-        return jdbcClient.sql("SELECT id, name, is_primary FROM gyms WHERE user_id = :userId")
+        return jdbcClient.sql("SELECT id, name FROM gyms WHERE user_id = :userId")
                          .param("userId", userId)
                          .query(GymResponse.class)
                          .list();
-    }
-
-    /**
-     * Marca un gimnasio como principal para un usuario.
-     * Primero desmarca el gimnasio actualmente principal,
-     * luego marca el nuevo. Ambas operaciones son secuenciales
-     * para garantizar que solo un gimnasio sea principal a la vez.
-     *
-     * @param id     id del gimnasio a marcar como principal
-     * @param userId id del usuario propietario — evita modificar gyms ajenos
-     */
-    public void setPrimary(Long id, Long userId) {
-        // Desmarcar actual gimnasio principal
-        jdbcClient.sql("UPDATE gyms SET is_primary = FALSE WHERE user_id = :userId AND is_primary = TRUE")
-                  .param("userId", userId)
-                  .update();
-
-        // Marcar nuevo gimnasio como pricipal
-        jdbcClient.sql("UPDATE gyms SET is_primary = TRUE WHERE id = :id AND user_id = :userId")
-                  .param("id", id)
-                  .param("userId", userId)
-                  .update();
     }
 
     /**

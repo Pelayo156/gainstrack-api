@@ -1,12 +1,13 @@
 package com.molina.gainstrack.api.repository;
 
-import com.molina.gainstrack.api.dto.GymResponse;
-import com.molina.gainstrack.api.dto.TrainingSessionSummaryResponse;
+import com.molina.gainstrack.api.dto.*;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.jdbc.support.GeneratedKeyHolder;
+import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Repository;
 
-import java.time.ZoneId;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Repositorio de acceso a datos para la tabla training_sessions.
@@ -38,19 +39,17 @@ public class TrainingSessionRepository {
         return jdbcClient.sql("SELECT ts.id AS training_session_id, " +
                                       "g.id AS gym_id, " +
                                       "g.name AS gym_name, " +
-                                      "g.is_primary AS gym_is_primary, " +
                                       "ts.session_date AS training_session_date, " +
                                       "ts.notes AS training_session_notes " +
                               "FROM training_sessions ts " +
-                              "JOIN gyms g ON ts.gym_id = g.id " +
+                              "LEFT JOIN gyms g ON ts.gym_id = g.id " +
                               "WHERE ts.user_id = :userId")
                 .param("userId", userId)
                 .query((rs, rowNum) -> new TrainingSessionSummaryResponse(
                         rs.getLong("training_session_id"),
                         new GymResponse(
                                 rs.getLong("gym_id"),
-                                rs.getString("gym_name"),
-                                rs.getBoolean("gym_is_primary")
+                                rs.getString("gym_name")
                         ),
                         rs.getDate("training_session_date")
                           .toLocalDate(),
@@ -59,37 +58,88 @@ public class TrainingSessionRepository {
                 .list();
     }
 
-    public TrainingSessionSummaryResponse save(Long userId, Long gymId, Long routineId) {
+    /**
+     * Inserta una nueva sesión de entrenamiento y retorna su resumen.
+     * Si routineId es null, crea la sesión vacía sin ejercicios precargados.
+     * Si routineId tiene valor, crea la sesión y precarga los ejercicios
+     * de la rutina en session_exercises (pendiente de implementar).
+     * La fecha de sesión se asigna automáticamente con NOW() en MySQL.
+     *
+     * @param userId    id del usuario autenticado
+     * @param gymId     id del gimnasio donde se realiza la sesión
+     * @param routineId id de la rutina a precargar — puede ser null
+     * @return TrainingSessionSummaryResponse con los datos de la sesión creada
+     */
+    public TrainingSessionDetailResponse save(Long userId, Long gymId, Long routineId) {
 
-        if (routineId == null) {
-            this.jdbcClient.sql("INSERT INTO training_sessions (user_id, gym_id, session_date) " +
-                                "VALUES (:userId, :gymId, NOW())")
-                    .param("userId", userId)
-                    .param("gymId", gymId)
-                    .update();
+        KeyHolder keyHolder = new GeneratedKeyHolder();
+        this.jdbcClient.sql("INSERT INTO training_sessions (user_id, routine_id, gym_id, session_date) " +
+                            "VALUES (:userId, :routineId, :gymId, NOW())")
+                       .param("userId", userId)
+                       .param("routineId", routineId)
+                       .param("gymId", gymId)
+                       .update(keyHolder);
+        Long sessionId = Objects.requireNonNull(keyHolder.getKey()).longValue();
+
+        // Se obtienen los ejercicios de la rutina que está asociada a la sesión
+        List<RoutineExerciseRow> routineExercises =
+                jdbcClient.sql("SELECT id, exercise_id, order_index, notes " +
+                               "FROM routine_exercises " +
+                               "WHERE routine_id = :routineId")
+                          .param("routineId", routineId)
+                          .query(RoutineExerciseRow.class)
+                          .list();
+
+        for (RoutineExerciseRow routineExercise : routineExercises) {
+            // Inserto ejercicio dentro de session_exercises
+            jdbcClient.sql("INSERT INTO session_exercises (session_id, exercise_id, order_index, notes) " +
+                            "VALUES (:sessionId, :exerciseId, :orderIndex, :notes)")
+                      .param("sessionId", sessionId)
+                      .param("exerciseId", routineExercise.exerciseId())
+                      .param("orderIndex", routineExercise.orderIndex())
+                      .param("notes", routineExercise.notes())
+                      .update(keyHolder);
+            Long sessionExerciseId = keyHolder.getKey().longValue();
+
+            // Se obtienen sets asociados a cada ejercicio de la rutina
+            List<SetRow> routineExerciseSets =
+                    jdbcClient.sql("SELECT id, set_number, weight, reps, notes " +
+                                   "FROM routine_sets " +
+                                   "WHERE routine_exercise_id = :routineExerciseId")
+                              .param("routineExerciseId", routineExercise.id())
+                              .query(SetRow.class)
+                              .list();
+
+            for (SetRow set : routineExerciseSets) {
+                // se insertan sets de cada ejercicio de la rutina
+                jdbcClient.sql("INSERT INTO sets (session_exercise_id, set_number, weight, reps, notes) " +
+                               "VALUES (:sessionExerciseId, :setNumber, :weight, :reps, :notes)")
+                        .param("sessionExerciseId", sessionExerciseId)
+                        .param("setNumber", set.setNumber())
+                        .param("weight", set.weight())
+                        .param("reps", set.reps())
+                        .param("notes", set.notes())
+                        .update();
+            }
         }
 
-        return jdbcClient.sql("SELECT ts.id AS training_session_id, " +
-                              "g.id AS gym_id, " +
-                              "g.name AS gym_name, " +
-                              "g.is_primary AS gym_is_primary, " +
-                              "ts.session_date AS training_session_date, " +
-                              "ts.notes AS training_session_notes " +
-                              "FROM training_sessions ts " +
-                              "JOIN gyms g ON ts.gym_id = g.id " +
-                              "WHERE ts.user_id = :userId ORDER BY ts.id DESC LIMIT 1")
-                .param("userId", userId)
-                .query((rs, rowNum) -> new TrainingSessionSummaryResponse(
-                        rs.getLong("training_session_id"),
-                        new GymResponse(
-                                rs.getLong("gym_id"),
-                                rs.getString("gym_name"),
-                                rs.getBoolean("gym_is_primary")
-                        ),
-                        rs.getDate("training_session_date")
-                          .toLocalDate(),
-                        rs.getString("training_session_notes")
-                ))
-                .single();
+        return jdbcClient.sql("");
+    }
+
+    /**
+     * Elimina una sesión de entrenamiento por su id.
+     * El userId garantiza que el usuario solo pueda eliminar sus propias sesiones.
+     * Por el CASCADE del modelo relacional, se eliminarán también
+     * todos los session_exercises y sets asociados a esta sesión.
+     *
+     * @param id     id de la sesión a eliminar
+     * @param userId id del usuario propietario — previene eliminación de sesiones ajenas
+     */
+    public void deleteById(Long id, Long userId) {
+        jdbcClient.sql("DELETE FROM training_sessions " +
+                       "WHERE id = :id AND user_id = :userId")
+                  .param("id", id)
+                  .param("userId", userId)
+                  .update();
     }
 }

@@ -37,8 +37,28 @@ public class TrainingSessionController {
         return ResponseEntity.ok(this.trainingSessionService.findAll());
    }
 
+    /**
+     * Crea una nueva sesión de entrenamiento para el usuario autenticado.
+     * Opcionalmente precarga ejercicios desde una rutina existente.
+     *
+     * @param request body con gymId obligatorio y routineId opcional
+     * @return 201 Created con el resumen de la sesión creada
+     */
    @PostMapping
     public ResponseEntity<TrainingSessionSummaryResponse> save(@RequestBody TrainingSessionRequest request) {
        return ResponseEntity.status(201).body(this.trainingSessionService.save(request));
    }
+
+    /**
+     * Elimina una sesión de entrenamiento del usuario autenticado.
+     * Advertencia: elimina también todos los ejercicios y sets asociados.
+     *
+     * @param id id de la sesión a eliminar
+     * @return 204 No Content
+     */
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteById(@PathVariable("id") Long id) {
+        trainingSessionService.deleteById(id);
+        return ResponseEntity.noContent().build();
+    }
 }

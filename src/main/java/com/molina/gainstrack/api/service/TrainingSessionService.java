@@ -42,8 +42,31 @@ public class TrainingSessionService {
         return this.trainingSessionRepository.findAll(user.getId());
     }
 
+    /**
+     * Crea una nueva sesión de entrenamiento para el usuario autenticado.
+     * Si se proporciona una rutina, precarga sus ejercicios en la sesión.
+     * La fecha se asigna automáticamente como la fecha actual del servidor.
+     *
+     * @param request datos de la sesión — gymId obligatorio, routineId opcional
+     * @return TrainingSessionSummaryResponse con los datos de la sesión creada
+     */
+
     public TrainingSessionSummaryResponse save(TrainingSessionRequest request) {
         User user = this.authUtils.getAuthenticatedUser();
-        return this.trainingSessionRepository.save(user.getId(), request.gymId(), request.routineId());
+        return this.trainingSessionRepository.save(user.getId(),
+                                                   request.gymId(),
+                                                   request.routineId());
+    }
+
+    /**
+     * Elimina una sesión de entrenamiento del usuario autenticado.
+     * Por el CASCADE del modelo relacional, se eliminarán también
+     * todos los ejercicios y sets asociados a esta sesión.
+     *
+     * @param id id de la sesión a eliminar
+     */
+    public void deleteById(Long id) {
+        User user = this.authUtils.getAuthenticatedUser();
+        trainingSessionRepository.deleteById(id, user.getId());
     }
 }

@@ -47,19 +47,6 @@ public class GymController {
     }
 
     /**
-     * Marca un gimnasio como principal para el usuario autenticado.
-     * Desmarca automáticamente el que era principal anteriormente.
-     *
-     * @param id id del gimnasio a marcar como principal
-     * @return 200 OK sin body
-     */
-    @PatchMapping("/{id}/primary")
-    public ResponseEntity<Void> setPrimary(@PathVariable("id") Long id) {
-        gymService.setPrimary(id);
-        return ResponseEntity.ok().build();
-    }
-
-    /**
      * Elimina un gimnasio por su id.
      * Advertencia: elimina también todas las sesiones asociadas.
      *
