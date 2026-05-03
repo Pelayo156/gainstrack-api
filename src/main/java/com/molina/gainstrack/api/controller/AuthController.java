@@ -1,7 +1,7 @@
 package com.molina.gainstrack.api.controller;
 
-import com.molina.gainstrack.api.dto.AuthRequest;
-import com.molina.gainstrack.api.dto.AuthResponse;
+import com.molina.gainstrack.api.dto.auth.AuthRequest;
+import com.molina.gainstrack.api.dto.auth.AuthResponse;
 import com.molina.gainstrack.api.service.AuthService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;

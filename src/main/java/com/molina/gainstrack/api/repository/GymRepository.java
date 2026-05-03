@@ -1,6 +1,6 @@
 package com.molina.gainstrack.api.repository;
 
-import com.molina.gainstrack.api.dto.GymResponse;
+import com.molina.gainstrack.api.dto.gym.GymResponse;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 

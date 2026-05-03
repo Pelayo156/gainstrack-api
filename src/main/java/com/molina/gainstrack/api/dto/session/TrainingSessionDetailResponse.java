@@ -1,4 +1,6 @@
-package com.molina.gainstrack.api.dto;
+package com.molina.gainstrack.api.dto.session;
+
+import com.molina.gainstrack.api.dto.gym.GymResponse;
 
 import java.time.LocalDate;
 import java.util.List;

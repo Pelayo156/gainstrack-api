@@ -1,4 +1,4 @@
-package com.molina.gainstrack.api.dto;
+package com.molina.gainstrack.api.dto.auth;
 
 /**
  * Datos recibidos del cliente para registro o login.

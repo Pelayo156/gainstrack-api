@@ -1,6 +1,6 @@
 package com.molina.gainstrack.api.repository;
 
-import com.molina.gainstrack.api.dto.MuscleGroupResponse;
+import com.molina.gainstrack.api.dto.shared.MuscleGroupResponse;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 

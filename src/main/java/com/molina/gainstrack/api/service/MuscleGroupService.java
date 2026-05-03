@@ -1,6 +1,6 @@
 package com.molina.gainstrack.api.service;
 
-import com.molina.gainstrack.api.dto.MuscleGroupResponse;
+import com.molina.gainstrack.api.dto.shared.MuscleGroupResponse;
 import com.molina.gainstrack.api.repository.MuscleGroupRepository;
 import org.springframework.stereotype.Service;
 

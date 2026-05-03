@@ -1,6 +1,6 @@
 package com.molina.gainstrack.api.controller;
 
-import com.molina.gainstrack.api.dto.MuscleGroupResponse;
+import com.molina.gainstrack.api.dto.shared.MuscleGroupResponse;
 import com.molina.gainstrack.api.service.MuscleGroupService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;

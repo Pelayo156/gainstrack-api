@@ -1,4 +1,4 @@
-package com.molina.gainstrack.api.dto;
+package com.molina.gainstrack.api.dto.shared;
 
 /**
  * DTO de salida que representa un grupo muscular del catálogo global.

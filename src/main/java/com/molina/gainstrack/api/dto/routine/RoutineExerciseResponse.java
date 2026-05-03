@@ -1,18 +1,21 @@
-package com.molina.gainstrack.api.dto;
+package com.molina.gainstrack.api.dto.routine;
+
+import com.molina.gainstrack.api.dto.exercise.ExerciseResponse;
+import com.molina.gainstrack.api.dto.session.SetResponse;
 
 import java.util.List;
 
 /**
- * DTO de salida que representa un ejercicio dentro de una sesión.
+ * DTO de salida que representa un ejercicio dentro de una rutina.
  * Contiene la referencia al ejercicio del catálogo y la lista de sets realizados.
  *
- * @param id         identificador único del session_exercise
- * @param orderIndex orden del ejercicio dentro de la sesión
+ * @param id         identificador único del routine_exercise
+ * @param orderIndex orden del ejercicio dentro de la rutina
  * @param notes      notas opcionales del ejercicio en esta sesión
  * @param exercise   datos del ejercicio del catálogo
  * @param sets       lista de sets realizados en este ejercicio
  */
-public record SessionExerciseResponse(Long id,
+public record RoutineExerciseResponse(Long id,
                                       Integer orderIndex,
                                       String notes,
                                       ExerciseResponse exercise,

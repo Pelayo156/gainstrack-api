@@ -1,8 +1,8 @@
 package com.molina.gainstrack.api.service;
 
 import com.molina.gainstrack.api.config.JwtService;
-import com.molina.gainstrack.api.dto.AuthRequest;
-import com.molina.gainstrack.api.dto.AuthResponse;
+import com.molina.gainstrack.api.dto.auth.AuthRequest;
+import com.molina.gainstrack.api.dto.auth.AuthResponse;
 import com.molina.gainstrack.api.repository.UserRepository;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;

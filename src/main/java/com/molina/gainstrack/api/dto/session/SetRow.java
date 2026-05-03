@@ -1,4 +1,4 @@
-package com.molina.gainstrack.api.dto;
+package com.molina.gainstrack.api.dto.session;
 
 /**
  * DTO de salida que representa un set dentro de un ejercicio de sesión.

@@ -1,4 +1,4 @@
-package com.molina.gainstrack.api.dto;
+package com.molina.gainstrack.api.dto.gym;
 
 /**
  * DTO de entrada para la creación de un gimnasio.

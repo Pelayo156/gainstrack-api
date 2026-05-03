@@ -1,7 +1,7 @@
 package com.molina.gainstrack.api.controller;
 
-import com.molina.gainstrack.api.dto.ExerciseRequest;
-import com.molina.gainstrack.api.dto.ExerciseResponse;
+import com.molina.gainstrack.api.dto.exercise.ExerciseRequest;
+import com.molina.gainstrack.api.dto.exercise.ExerciseResponse;
 import com.molina.gainstrack.api.service.ExerciseService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;

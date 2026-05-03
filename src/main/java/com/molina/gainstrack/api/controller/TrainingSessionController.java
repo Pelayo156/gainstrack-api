@@ -1,7 +1,8 @@
 package com.molina.gainstrack.api.controller;
 
-import com.molina.gainstrack.api.dto.TrainingSessionRequest;
-import com.molina.gainstrack.api.dto.TrainingSessionSummaryResponse;
+import com.molina.gainstrack.api.dto.session.TrainingSessionDetailResponse;
+import com.molina.gainstrack.api.dto.session.TrainingSessionRequest;
+import com.molina.gainstrack.api.dto.session.TrainingSessionSummaryResponse;
 import com.molina.gainstrack.api.service.TrainingSessionService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -38,15 +39,27 @@ public class TrainingSessionController {
    }
 
     /**
-     * Crea una nueva sesión de entrenamiento para el usuario autenticado.
-     * Opcionalmente precarga ejercicios desde una rutina existente.
+     * Crea una nueva sesión ejecutando una rutina existente.
+     * Copia automáticamente ejercicios y sets de la rutina como punto de partida.
      *
-     * @param request body con gymId obligatorio y routineId opcional
-     * @return 201 Created con el resumen de la sesión creada
+     * @param request body con routineId obligatorio, gymId y notes opcionales
+     * @return 201 Created con el detalle completo de la sesión creada
      */
    @PostMapping
-    public ResponseEntity<TrainingSessionSummaryResponse> save(@RequestBody TrainingSessionRequest request) {
+    public ResponseEntity<TrainingSessionDetailResponse> save(@RequestBody TrainingSessionRequest request) {
        return ResponseEntity.status(201).body(this.trainingSessionService.save(request));
+   }
+
+    /**
+     * Retorna el detalle completo de una sesión del usuario autenticado.
+     * Incluye ejercicios realizados con sus sets y pesos registrados.
+     *
+     * @param id id de la sesión a consultar
+     * @return 200 OK con ejercicios y sets anidados
+     */
+   @GetMapping("/{id}")
+   public ResponseEntity<TrainingSessionDetailResponse> findById(@PathVariable("id") Long id) {
+       return ResponseEntity.ok().body(this.trainingSessionService.findById(id));
    }
 
     /**

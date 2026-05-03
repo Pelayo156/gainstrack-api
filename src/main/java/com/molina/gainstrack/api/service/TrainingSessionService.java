@@ -1,7 +1,8 @@
 package com.molina.gainstrack.api.service;
 
-import com.molina.gainstrack.api.dto.TrainingSessionRequest;
-import com.molina.gainstrack.api.dto.TrainingSessionSummaryResponse;
+import com.molina.gainstrack.api.dto.session.TrainingSessionDetailResponse;
+import com.molina.gainstrack.api.dto.session.TrainingSessionRequest;
+import com.molina.gainstrack.api.dto.session.TrainingSessionSummaryResponse;
 import com.molina.gainstrack.api.model.User;
 import com.molina.gainstrack.api.repository.TrainingSessionRepository;
 import com.molina.gainstrack.api.utils.AuthUtils;
@@ -44,23 +45,35 @@ public class TrainingSessionService {
 
     /**
      * Crea una nueva sesión de entrenamiento para el usuario autenticado.
-     * Si se proporciona una rutina, precarga sus ejercicios en la sesión.
+     * Copia ejercicios y sets desde la rutina indicada como punto de partida.
      * La fecha se asigna automáticamente como la fecha actual del servidor.
      *
-     * @param request datos de la sesión — gymId obligatorio, routineId opcional
-     * @return TrainingSessionSummaryResponse con los datos de la sesión creada
+     * @param request datos de la sesión — routineId obligatorio, gymId y notes opcionales
+     * @return TrainingSessionDetailResponse con el detalle completo de la sesión creada
      */
-
-    public TrainingSessionSummaryResponse save(TrainingSessionRequest request) {
+    public TrainingSessionDetailResponse save(TrainingSessionRequest request) {
         User user = this.authUtils.getAuthenticatedUser();
         return this.trainingSessionRepository.save(user.getId(),
                                                    request.gymId(),
-                                                   request.routineId());
+                                                   request.routineId(),
+                                                   request.notes());
+    }
+
+    /**
+     * Retorna el detalle completo de una sesión del usuario autenticado.
+     * Incluye ejercicios realizados con sus sets y pesos registrados.
+     *
+     * @param id id de la sesión a consultar
+     * @return TrainingSessionDetailResponse con ejercicios y sets anidados
+     */
+    public TrainingSessionDetailResponse findById(Long id) {
+        User user = this.authUtils.getAuthenticatedUser();
+        return this.trainingSessionRepository.findById(id, user.getId());
     }
 
     /**
      * Elimina una sesión de entrenamiento del usuario autenticado.
-     * Por el CASCADE del modelo relacional, se eliminarán también
+     * Por el CASCADE del modelo relacional, se eliminan también
      * todos los ejercicios y sets asociados a esta sesión.
      *
      * @param id id de la sesión a eliminar

@@ -1,4 +1,4 @@
-package com.molina.gainstrack.api.dto;
+package com.molina.gainstrack.api.dto.gym;
 
 /**
  * DTO de salida que representa un gimnasio registrado.

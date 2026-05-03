@@ -1,7 +1,7 @@
 package com.molina.gainstrack.api.service;
 
-import com.molina.gainstrack.api.dto.ExerciseRequest;
-import com.molina.gainstrack.api.dto.ExerciseResponse;
+import com.molina.gainstrack.api.dto.exercise.ExerciseRequest;
+import com.molina.gainstrack.api.dto.exercise.ExerciseResponse;
 import com.molina.gainstrack.api.model.User;
 import com.molina.gainstrack.api.repository.ExerciseRepository;
 import com.molina.gainstrack.api.utils.AuthUtils;
