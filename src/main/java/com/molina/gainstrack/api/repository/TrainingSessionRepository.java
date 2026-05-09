@@ -2,7 +2,6 @@ package com.molina.gainstrack.api.repository;
 
 import com.molina.gainstrack.api.dto.exercise.ExerciseResponse;
 import com.molina.gainstrack.api.dto.gym.GymResponse;
-import com.molina.gainstrack.api.dto.routine.RoutineExerciseRow;
 import com.molina.gainstrack.api.dto.session.*;
 import com.molina.gainstrack.api.dto.shared.MuscleGroupResponse;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -246,4 +245,34 @@ public class TrainingSessionRepository {
                   .param("userId", userId)
                   .update();
     }
+
+    /**
+     * Record interno usado para mapear filas de routine_exercises
+     * durante la creación de una sesión desde una rutina.
+     * Proyección parcial — solo los campos necesarios para la copia.
+     *
+     * @param id          id del registro en routine_exercises
+     * @param exerciseId  id del ejercicio del catálogo asociado
+     * @param orderIndex  orden del ejercicio dentro de la rutina
+     * @param notes       notas opcionales del ejercicio en la rutina
+     */
+    private record RoutineExerciseRow(Long id,
+                                      Long exerciseId,
+                                      Integer orderIndex,
+                                      String notes) {}
+
+    /**
+     * Record interno usado para mapear filas de routine_sets
+     * durante la copia de sets desde una rutina a una sesión.
+     * Proyección parcial — solo los campos necesarios para la copia.
+     *
+     * @param setNumber número de serie dentro del ejercicio
+     * @param weight    peso de referencia en kilogramos
+     * @param reps      repeticiones de referencia
+     * @param notes     notas opcionales del set
+     */
+    private record SetRow(Integer setNumber,
+                          Double weight,
+                          Integer reps,
+                          String notes) {}
 }

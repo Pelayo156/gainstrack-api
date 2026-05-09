@@ -13,29 +13,58 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 import java.util.Objects;
 
+/**
+ * Repositorio de acceso a datos para la tabla routines.
+ * Ejecuta SQL puro mediante JdbcClient, sin ORM.
+ * Todas las operaciones están acotadas al usuario propietario
+ * para garantizar aislamiento de datos entre usuarios.
+ */
 @Repository
 public class RoutineRepository {
 
     private final JdbcClient jdbcClient;
 
+    /**
+     * @param jdbcClient cliente JDBC para ejecutar consultas SQL
+     */
     public RoutineRepository(JdbcClient jdbcClient) {
         this.jdbcClient = jdbcClient;
     }
 
+    /**
+     * Retorna el resumen de todas las rutinas del usuario.
+     * No incluye ejercicios ni sets — usar findById para el detalle completo.
+     *
+     * @param userId id del usuario autenticado
+     * @return lista de rutinas con sus datos de cabecera
+     */
     public List<RoutineSummaryResponse> findAll(Long userId) {
-        return jdbcClient.sql("SELECT id, name, created_at, notes " +
-                              "FROM routines " +
-                              "WHERE user_id = :userId")
-                         .param("userId", userId)
-                         .query(RoutineSummaryResponse.class)
-                         .list();
+        return this.jdbcClient.sql("SELECT id, name, created_at, notes, is_free " +
+                                   "FROM routines " +
+                                   "WHERE user_id = :userId")
+                              .param("userId", userId)
+                              .query(RoutineSummaryResponse.class)
+                              .list();
     }
 
+    /**
+     * Retorna el detalle completo de una rutina.
+     * Ejecuta tres queries anidadas para construir la respuesta:
+     * 1. Datos de la rutina
+     * 2. Ejercicios de la rutina con sus datos del catálogo
+     * 3. Sets de referencia de cada ejercicio
+     * El userId garantiza que el usuario solo pueda ver sus propias rutinas.
+     *
+     * @param id     id de la rutina a consultar
+     * @param userId id del usuario propietario — previene acceso a rutinas ajenas
+     * @return RoutineDetailResponse con ejercicios y sets anidados
+     */
     public RoutineDetailResponse findById(Long id, Long userId) {
         return jdbcClient.sql("SELECT id AS routine_id, " +
                                      "name AS routine_name, " +
                                      "created_at AS routine_created_at, " +
-                                     "notes AS routine_notes " +
+                                     "notes AS routine_notes, " +
+                                     "is_free AS routine_is_free " +
                                      "FROM routines " +
                                      "WHERE id = :id AND user_id = :userId")
                          .param("id", id)
@@ -95,41 +124,95 @@ public class RoutineRepository {
                                      rs.getDate("routine_created_at")
                                        .toLocalDate(),
                                      rs.getString("routine_notes"),
+                                     rs.getBoolean("routine_is_free"),
                                      routineExercises
                              );
                          })
                          .single();
     }
 
+    /**
+     * Crea una nueva rutina para el usuario autenticado.
+     * La rutina se crea con is_free = FALSE por defecto.
+     * Usa KeyHolder para obtener el id generado y retornar el registro creado.
+     *
+     * @param userId id del usuario autenticado
+     * @param name   nombre de la rutina
+     * @param notes  notas opcionales de la rutina
+     * @return RoutineSummaryResponse con los datos de la rutina creada
+     */
     public RoutineSummaryResponse save(Long userId, String name, String notes) {
         // Se crea rutina con datos básicos
         KeyHolder keyHolder = new GeneratedKeyHolder();
-        jdbcClient.sql("INSERT INTO routines (user_id, name, notes) " +
-                       "VALUES (:userId, :name, :notes)")
-                  .param("userId", userId)
-                  .param("name", name)
-                  .param("notes", notes)
-                  .update(keyHolder);
+        this.jdbcClient.sql("INSERT INTO routines (user_id, name, notes) " +
+                            "VALUES (:userId, :name, :notes)")
+                       .param("userId", userId)
+                       .param("name", name)
+                       .param("notes", notes)
+                       .update(keyHolder);
         Long routineId = Objects.requireNonNull(keyHolder.getKey()).longValue();
 
-        return jdbcClient.sql("SELECT id, name, created_at, notes " +
-                              "FROM routines " +
-                              "WHERE id = :routineId AND user_id = :userId")
-                         .param("routineId", routineId)
-                         .param("userId", userId)
-                         .query(RoutineSummaryResponse.class)
-                         .single();
+        return this.jdbcClient.sql("SELECT id, name, created_at, notes, is_free " +
+                                   "FROM routines " +
+                                   "WHERE id = :routineId AND user_id = :userId")
+                              .param("routineId", routineId)
+                              .param("userId", userId)
+                              .query(RoutineSummaryResponse.class)
+                              .single();
     }
 
+    /**
+     * Actualiza nombre y/o notas de una rutina.
+     * Usa COALESCE para actualizar solo los campos enviados —
+     * si un campo llega null, conserva el valor actual en la base de datos.
+     * El userId garantiza que el usuario solo pueda editar sus propias rutinas.
+     *
+     * @param id     id de la rutina a actualizar
+     * @param userId id del usuario propietario — previene edición de rutinas ajenas
+     * @param name   nuevo nombre — puede ser null para mantener el actual
+     * @param notes  nuevas notas — puede ser null para mantener las actuales
+     */
     public void update(Long id, Long userId, String name, String notes) {
-        jdbcClient.sql("UPDATE routines " +
-                       "SET name = :name, notes = :notes " +
-                       "WHERE id = :id " +
-                       "AND user_id = :userId")
-                  .param("name", name)
-                  .param("notes", notes)
-                  .param("id", id)
-                  .param("userId", userId)
-                  .update();
+        this.jdbcClient.sql("UPDATE routines " +
+                            "SET name = COALESCE(:name, name), notes = COALESCE(:notes, notes) " +
+                            "WHERE id = :id " +
+                            "AND user_id = :userId")
+                       .param("name", name)
+                       .param("notes", notes)
+                       .param("id", id)
+                       .param("userId", userId)
+                       .update();
+    }
+
+    /**
+     * Elimina una rutina por su id.
+     * Por el CASCADE del modelo relacional, se eliminan también
+     * todos los routine_exercises, routine_sets y training_sessions asociados.
+     * El userId garantiza que el usuario solo pueda eliminar sus propias rutinas.
+     * La validación de is_free se realiza en el service antes de llamar este método.
+     *
+     * @param id     id de la rutina a eliminar
+     * @param userId id del usuario propietario — previene eliminación de rutinas ajenas
+     */
+    public void deleteById(Long id, Long userId) {
+        this.jdbcClient.sql("DELETE FROM routines " +
+                            "WHERE id = :id AND user_id = :userId")
+                       .param("id", id)
+                       .param("userId", userId)
+                       .update();
+    }
+
+    public RoutineDetailResponse saveExercise(Long id,
+                                              Long exerciseId,
+                                              Integer orderIndex,
+                                              Long userId) {
+        this.jdbcClient.sql("INSERT INTO routine_exercises (routine_id, exercise_id, order_index, notes) " +
+                            "VALUES (:id, :exerciseId, :orderIndex, NULL)")
+                       .param("id", id)
+                       .param("exerciseId", exerciseId)
+                       .param("orderIndex", orderIndex)
+                       .update();
+
+        return this.findById(id, userId);
     }
 }
