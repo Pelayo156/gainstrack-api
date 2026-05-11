@@ -202,6 +202,17 @@ public class RoutineRepository {
                        .update();
     }
 
+    /**
+     * Agrega un ejercicio a una rutina existente.
+     * El ejercicio se inserta con notas nulas — se editan posteriormente.
+     * Retorna el detalle completo de la rutina actualizada.
+     *
+     * @param id         id de la rutina
+     * @param exerciseId id del ejercicio del catálogo a agregar
+     * @param orderIndex posición del ejercicio dentro de la rutina
+     * @param userId     id del usuario propietario
+     * @return RoutineDetailResponse con la rutina actualizada
+     */
     public RoutineDetailResponse saveExercise(Long id,
                                               Long exerciseId,
                                               Integer orderIndex,
@@ -214,5 +225,158 @@ public class RoutineRepository {
                        .update();
 
         return this.findById(id, userId);
+    }
+
+    /**
+     * Elimina un ejercicio de una rutina.
+     * Por el CASCADE del modelo relacional, se eliminan también
+     * todos los routine_sets asociados al ejercicio eliminado.
+     * Retorna el detalle completo de la rutina actualizada.
+     *
+     * @param id         id de la rutina
+     * @param exerciseId id del ejercicio a eliminar
+     * @param userId     id del usuario propietario
+     * @return RoutineDetailResponse con la rutina actualizada
+     */
+    public RoutineDetailResponse deleteExerciseById(Long id,
+                                                    Long exerciseId,
+                                                    Long userId) {
+        this.jdbcClient.sql("DELETE FROM routine_exercises " +
+                            "WHERE routine_id = :id " +
+                            "AND exercise_id = :exerciseId")
+                       .param("id", id)
+                       .param("exerciseId", exerciseId)
+                       .update();
+
+        return this.findById(id,
+                             userId);
+    }
+
+    /**
+     * Agrega un set vacío a un ejercicio de una rutina.
+     * El set se crea con peso 0 y reps 0 — se editan posteriormente
+     * con los valores reales del entrenamiento.
+     * Retorna el detalle completo de la rutina actualizada.
+     *
+     * @param id                 id de la rutina
+     * @param routineExerciseId  id del registro en routine_exercises
+     * @param setNumber          número de serie dentro del ejercicio
+     * @param userId             id del usuario propietario
+     * @return RoutineDetailResponse con la rutina actualizada
+     */
+    public RoutineDetailResponse saveExerciseSet(Long id,
+                                                 Long routineExerciseId,
+                                                 Integer setNumber,
+                                                 Long userId) {
+        this.jdbcClient.sql("INSERT INTO routine_sets (routine_exercise_id, set_number, weight, reps, notes) " +
+                            "VALUES (:routineExerciseId, :setNumber, 0, 0, NULL)")
+                       .param("routineExerciseId", routineExerciseId)
+                       .param("setNumber", setNumber)
+                       .update();
+
+        return this.findById(id,
+                             userId);
+    }
+
+    /**
+     * Elimina un set de un ejercicio de una rutina.
+     * Retorna el detalle completo de la rutina actualizada.
+     *
+     * @param id                id de la rutina
+     * @param setId             id del set a eliminar
+     * @param routineExerciseId id del registro en routine_exercises
+     * @param userId            id del usuario propietario
+     * @return RoutineDetailResponse con la rutina actualizada
+     */
+    public RoutineDetailResponse deleteExerciseSetById(Long id,
+                                                       Long setId,
+                                                       Long routineExerciseId,
+                                                       Long userId) {
+        this.jdbcClient.sql("DELETE FROM routine_sets " +
+                            "WHERE id = :setId " +
+                            "AND routine_exercise_id = :routineExerciseId")
+                       .param("setId", setId)
+                       .param("routineExerciseId", routineExerciseId)
+                       .update();
+
+        return this.findById(id,
+                             userId);
+    }
+
+    /**
+     * Actualiza los datos de un ejercicio dentro de una rutina.
+     * Usa COALESCE para actualizar solo los campos enviados.
+     * Permite reemplazar el ejercicio por otro o cambiar su orden y notas.
+     * Retorna el detalle completo de la rutina actualizada.
+     *
+     * @param id                id de la rutina
+     * @param routineExerciseId id del registro en routine_exercises
+     * @param exerciseId        nuevo ejercicio — puede ser null para mantener el actual
+     * @param orderIndex        nueva posición — puede ser null para mantener la actual
+     * @param notes             nuevas notas — puede ser null para mantener las actuales
+     * @param userId            id del usuario propietario
+     * @return RoutineDetailResponse con la rutina actualizada
+     */
+    public RoutineDetailResponse updateExercise(Long id,
+                                                Long routineExerciseId,
+                                                Long exerciseId,
+                                                Integer orderIndex,
+                                                String notes,
+                                                Long userId) {
+        this.jdbcClient.sql("UPDATE routine_exercises " +
+                            "SET exercise_id = COALESCE(:exerciseId, exercise_id), " +
+                                "order_index = COALESCE(:orderIndex, order_index), " +
+                                "notes = COALESCE(:notes, notes) " +
+                            "WHERE id = :routineExerciseId")
+                       .param("exerciseId", exerciseId)
+                       .param("orderIndex", orderIndex)
+                       .param("notes", notes)
+                       .param("routineExerciseId", routineExerciseId)
+                       .update();
+
+        return this.findById(id,
+                             userId);
+    }
+
+    /**
+     * Actualiza los datos de un set de un ejercicio de una rutina.
+     * Usa COALESCE para actualizar solo los campos enviados.
+     * Retorna el detalle completo de la rutina actualizada.
+     *
+     * @param id                id de la rutina
+     * @param setId             id del set a actualizar
+     * @param routineExerciseId id del registro en routine_exercises
+     * @param setNumber         nuevo número de serie — puede ser null
+     * @param weight            nuevo peso en kg — puede ser null
+     * @param reps              nuevas repeticiones — puede ser null
+     * @param notes             nuevas notas — puede ser null
+     * @param userId            id del usuario propietario
+     * @return RoutineDetailResponse con la rutina actualizada
+     */
+    public RoutineDetailResponse updateExerciseSet(Long id,
+                                                   Long setId,
+                                                   Long routineExerciseId,
+                                                   Integer setNumber,
+                                                   Double weight,
+                                                   Integer reps,
+                                                   String notes,
+                                                   Long userId) {
+        this.jdbcClient.sql("UPDATE routine_sets " +
+                            "SET set_number = COALESCE(:setNumber, set_number), " +
+                                "weight = COALESCE(:weight, weight), " +
+                                "reps = COALESCE(:reps, reps), " +
+                                "notes = COALESCE(:notes, notes) " +
+                            "WHERE id = :setId " +
+                            "AND routine_exercise_id = :routineExerciseId")
+                       .param("setNumber", setNumber)
+                       .param("weight", weight)
+                       .param("reps", reps)
+                       .param("notes", notes)
+                       .param("setId", setId)
+                       .param("routineExerciseId", routineExerciseId)
+                       .update();
+
+        return this.findById(id,
+                             userId);
     }
 }

@@ -1,8 +1,6 @@
 package com.molina.gainstrack.api.controller;
 
-import com.molina.gainstrack.api.dto.routine.RoutineDetailResponse;
-import com.molina.gainstrack.api.dto.routine.RoutineRequest;
-import com.molina.gainstrack.api.dto.routine.RoutineSummaryResponse;
+import com.molina.gainstrack.api.dto.routine.*;
 import com.molina.gainstrack.api.service.RoutineService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -89,9 +87,106 @@ public class RoutineController {
         return ResponseEntity.noContent().build();
     }
 
+    /**
+     * Agrega un ejercicio a una rutina del usuario autenticado.
+     *
+     * @param id      id de la rutina
+     * @param request body con exerciseId y orderIndex
+     * @return 201 Created con la rutina actualizada
+     */
     @PostMapping("/{id}/exercises")
     public ResponseEntity<RoutineDetailResponse> saveExercise(@PathVariable("id") Long id,
-                                                              Long exerciseId) {
-        return ResponseEntity.status(201).body(this.routineService.saveExercise(id, exerciseId));
+                                                              @RequestBody RoutineExerciseRequest request) {
+        return ResponseEntity.status(201).body(this.routineService.saveExercise(id,
+                                                                                request));
+    }
+
+    /**
+     * Elimina un ejercicio de una rutina del usuario autenticado.
+     * Advertencia: elimina también todos los sets asociados al ejercicio.
+     *
+     * @param id         id de la rutina
+     * @param exerciseId id del ejercicio a eliminar
+     * @return 200 OK con la rutina actualizada
+     */
+    @DeleteMapping("/{id}/exercises/{exerciseId}")
+    public ResponseEntity<RoutineDetailResponse> deleteExerciseById(@PathVariable("id") Long id,
+                                                                    @PathVariable("exerciseId") Long exerciseId) {
+        return ResponseEntity.ok().body(this.routineService.deleteExerciseById(id,
+                                                                               exerciseId));
+    }
+
+    /**
+     * Agrega un set vacío a un ejercicio de una rutina del usuario autenticado.
+     * El set se crea con peso 0 y reps 0 para ser editado posteriormente.
+     *
+     * @param id         id de la rutina
+     * @param exerciseId id del ejercicio al que agregar el set
+     * @param request    body con setNumber
+     * @return 201 Created con la rutina actualizada
+     */
+    @PostMapping("/{id}/exercises/{exerciseId}/sets")
+    public ResponseEntity<RoutineDetailResponse> saveExerciseSet(@PathVariable("id") Long id,
+                                                                 @PathVariable("exerciseId") Long exerciseId,
+                                                                 @RequestBody RoutineSetRequest request) {
+        return ResponseEntity.status(201).body(this.routineService.saveExerciseSet(id,
+                                                                                   exerciseId,
+                                                                                   request));
+    }
+
+    /**
+     * Elimina un set de un ejercicio de una rutina del usuario autenticado.
+     *
+     * @param id         id de la rutina
+     * @param exerciseId id del ejercicio al que pertenece el set
+     * @param setId      id del set a eliminar
+     * @return 200 OK con la rutina actualizada
+     */
+    @DeleteMapping("/{id}/exercises/{exerciseId}/sets/{setId}")
+    public ResponseEntity<RoutineDetailResponse> deleteExerciseSetById(@PathVariable("id") Long id,
+                                                                       @PathVariable("exerciseId") Long exerciseId,
+                                                                       @PathVariable("setId") Long setId) {
+        return ResponseEntity.ok().body(this.routineService.deleteExerciseSetById(id,
+                                                                                  exerciseId,
+                                                                                  setId));
+    }
+
+    /**
+     * Actualiza los datos de un ejercicio dentro de una rutina del usuario autenticado.
+     * Solo modifica los campos enviados en el body.
+     *
+     * @param id         id de la rutina
+     * @param exerciseId id del ejercicio a actualizar
+     * @param request    body con exerciseId, orderIndex y/o notes — todos opcionales
+     * @return 200 OK con la rutina actualizada
+     */
+    @PatchMapping("/{id}/exercises/{exerciseId}")
+    public ResponseEntity<RoutineDetailResponse> updateExercise(@PathVariable("id") Long id,
+                                                                @PathVariable("exerciseId") Long exerciseId,
+                                                                @RequestBody RoutineExerciseUpdateRequest request) {
+        return ResponseEntity.ok().body(this.routineService.updateExercise(id,
+                                                                           exerciseId,
+                                                                           request));
+    }
+
+    /**
+     * Actualiza los datos de un set de un ejercicio de una rutina del usuario autenticado.
+     * Solo modifica los campos enviados en el body.
+     *
+     * @param id         id de la rutina
+     * @param exerciseId id del ejercicio al que pertenece el set
+     * @param setId      id del set a actualizar
+     * @param request    body con setNumber, weight, reps y/o notes — todos opcionales
+     * @return 200 OK con la rutina actualizada
+     */
+    @PatchMapping("/{id}/exercises/{exerciseId}/sets/{setId}")
+    public ResponseEntity<RoutineDetailResponse> updateExerciseSet(@PathVariable("id") Long id,
+                                                                   @PathVariable("exerciseId") Long exerciseId,
+                                                                   @PathVariable("setId") Long setId,
+                                                                   @RequestBody RoutineSetRequest request) {
+        return ResponseEntity.ok().body(this.routineService.updateExerciseSet(id,
+                                                                              exerciseId,
+                                                                              setId,
+                                                                              request));
     }
 }

@@ -136,4 +136,13 @@ public class ExerciseRepository {
                 .param("userId", userId)
                 .update();
     }
+
+    public boolean existsById(Long id) {
+        return jdbcClient.sql("SELECT COUNT(*) " +
+                              "FROM exercises " +
+                              "WHERE id = :id AND deleted_at IS NULL")
+                         .param("id", id)
+                         .query(Integer.class)
+                         .single() > 0;
+    }
 }
