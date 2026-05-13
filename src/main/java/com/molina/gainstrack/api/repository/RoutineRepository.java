@@ -379,4 +379,11 @@ public class RoutineRepository {
         return this.findById(id,
                              userId);
     }
+
+    public void saveFree(Long userId) {
+        this.jdbcClient.sql("INSERT INTO routines (user_id, name, notes, is_free) " +
+                            "VALUES (:userId, 'Rutina Libre', NULL, TRUE)")
+                       .param("userId", userId)
+                       .update();
+    }
 }
