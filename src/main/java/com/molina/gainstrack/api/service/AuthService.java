@@ -4,6 +4,7 @@ import com.molina.gainstrack.api.config.JwtService;
 import com.molina.gainstrack.api.dto.auth.AuthRequest;
 import com.molina.gainstrack.api.dto.auth.AuthResponse;
 import com.molina.gainstrack.api.model.User;
+import com.molina.gainstrack.api.repository.RoutineRepository;
 import com.molina.gainstrack.api.repository.UserRepository;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -25,7 +26,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
-    private final RoutineService routineService;
+    private final RoutineRepository routineRepository;
 
     /**
      * @param userRepository        repositorio de usuarios
@@ -37,18 +38,20 @@ public class AuthService {
                        PasswordEncoder passwordEncoder,
                        JwtService jwtService,
                        AuthenticationManager authenticationManager,
-                       RoutineService routineService) {
+                       RoutineRepository routineRepository) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.authenticationManager = authenticationManager;
-        this.routineService = routineService;
+        this.routineRepository = routineRepository;
     }
 
     /**
      * Registra un nuevo usuario en el sistema.
-     * Hashea la contraseña antes de persistirla y genera un JWT
-     * para que el usuario quede autenticado inmediatamente.
+     * Hashea la contraseña, crea el usuario, genera su rutina libre automáticamente
+     * y retorna un JWT listo para usar.
+     * La anotación @Transactional garantiza que si la creación de la rutina libre
+     * falla, la creación del usuario también se revierte.
      *
      * @param request datos de registro con email y contraseña en texto plano
      * @return AuthResponse con el JWT generado
@@ -56,12 +59,12 @@ public class AuthService {
     @Transactional
     public AuthResponse register(AuthRequest request) {
         String hashedPassword = passwordEncoder.encode(request.password());
-        userRepository.save(request.email(), hashedPassword);
+        Long userId = userRepository.save(request.email(), hashedPassword);
 
-        // Se crea rutina libre por defecto a usuario registrado
-        User user = userRepository.findByEmail(request.email()).orElseThrow(() -> new RuntimeException("Usuario no encontrado tras registro."));
-        this.routineService.saveFree(user.getId());
+        // Se crea rutina libre
+        this.routineRepository.saveFree(userId);
 
+        // Se genera token para futuras request
         String token = jwtService.generateToken(request.email());
         return new AuthResponse(token);
     }

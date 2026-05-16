@@ -288,8 +288,4 @@ public class RoutineService {
                                                         request.notes(),
                                                         user.getId());
     }
-
-    public void saveFree(Long userId) {
-        this.routineRepository.saveFree(userId);
-    }
 }

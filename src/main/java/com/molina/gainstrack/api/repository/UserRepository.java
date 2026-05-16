@@ -2,8 +2,11 @@ package com.molina.gainstrack.api.repository;
 
 import com.molina.gainstrack.api.model.User;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.jdbc.support.GeneratedKeyHolder;
+import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Repository;
 
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -30,15 +33,20 @@ public class UserRepository {
     }
 
     /**
-     * Guarda un nuevo usuario en la base de datos.
+     * Inserta un nuevo usuario en la base de datos.
+     * Usa KeyHolder para obtener el id generado automáticamente por MySQL.
      *
      * @param email        correo electrónico del nuevo usuario
      * @param passwordHash contraseña ya hasheada con BCrypt
+     * @return id generado para el usuario recién creado
      */
-    public void save(String email, String passwordHash) {
+    public Long save(String email, String passwordHash) {
+        KeyHolder keyHolder = new GeneratedKeyHolder();
         jdbcClient.sql("INSERT INTO users (email, password_hash) VALUES (:email, :passwordHash)")
                   .param("email", email)
                   .param("passwordHash", passwordHash)
-                  .update();
+                  .update(keyHolder);
+
+        return Objects.requireNonNull(keyHolder.getKey()).longValue();
     }
 }

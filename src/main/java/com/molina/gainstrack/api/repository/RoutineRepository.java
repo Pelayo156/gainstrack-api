@@ -380,6 +380,13 @@ public class RoutineRepository {
                              userId);
     }
 
+    /**
+     * Crea la rutina libre por defecto para un usuario recién registrado.
+     * Esta rutina es especial — is_free = TRUE — y no puede ser eliminada.
+     * Recibe sesiones sin rutina específica asignada.
+     *
+     * @param userId id del usuario recién registrado
+     */
     public void saveFree(Long userId) {
         this.jdbcClient.sql("INSERT INTO routines (user_id, name, notes, is_free) " +
                             "VALUES (:userId, 'Rutina Libre', NULL, TRUE)")
