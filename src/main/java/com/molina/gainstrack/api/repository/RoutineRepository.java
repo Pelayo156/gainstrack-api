@@ -6,6 +6,7 @@ import com.molina.gainstrack.api.dto.routine.RoutineExerciseResponse;
 import com.molina.gainstrack.api.dto.routine.RoutineSummaryResponse;
 import com.molina.gainstrack.api.dto.session.SetResponse;
 import com.molina.gainstrack.api.dto.shared.MuscleGroupResponse;
+import com.molina.gainstrack.api.exception.NotFoundException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
@@ -128,7 +129,8 @@ public class RoutineRepository {
                                      routineExercises
                              );
                          })
-                         .single();
+                         .optional()
+                         .orElseThrow(() -> new NotFoundException("Rutina no encontrada"));
     }
 
     /**
@@ -173,15 +175,19 @@ public class RoutineRepository {
      * @param notes  nuevas notas — puede ser null para mantener las actuales
      */
     public void update(Long id, Long userId, String name, String notes) {
-        this.jdbcClient.sql("UPDATE routines " +
-                            "SET name = COALESCE(:name, name), notes = COALESCE(:notes, notes) " +
-                            "WHERE id = :id " +
-                            "AND user_id = :userId")
-                       .param("name", name)
-                       .param("notes", notes)
-                       .param("id", id)
-                       .param("userId", userId)
-                       .update();
+        int affectedRows = this.jdbcClient.sql("UPDATE routines " +
+                                               "SET name = COALESCE(:name, name), notes = COALESCE(:notes, notes) " +
+                                               "WHERE id = :id " +
+                                               "AND user_id = :userId")
+                                          .param("name", name)
+                                          .param("notes", notes)
+                                          .param("id", id)
+                                          .param("userId", userId)
+                                          .update();
+
+        if (affectedRows == 0) {
+            throw new NotFoundException("Rutina no encontrada");
+        }
     }
 
     /**
@@ -195,11 +201,15 @@ public class RoutineRepository {
      * @param userId id del usuario propietario — previene eliminación de rutinas ajenas
      */
     public void deleteById(Long id, Long userId) {
-        this.jdbcClient.sql("DELETE FROM routines " +
-                            "WHERE id = :id AND user_id = :userId")
-                       .param("id", id)
-                       .param("userId", userId)
-                       .update();
+        int affectedRows = this.jdbcClient.sql("DELETE FROM routines " +
+                                               "WHERE id = :id AND user_id = :userId")
+                                          .param("id", id)
+                                          .param("userId", userId)
+                                          .update();
+
+        if (affectedRows == 0) {
+            throw new NotFoundException("Rutina no encontrada");
+        }
     }
 
     /**
@@ -239,14 +249,18 @@ public class RoutineRepository {
      * @return RoutineDetailResponse con la rutina actualizada
      */
     public RoutineDetailResponse deleteExerciseById(Long id,
-                                                    Long exerciseId,
+                                                    Long routineExerciseId,
                                                     Long userId) {
-        this.jdbcClient.sql("DELETE FROM routine_exercises " +
-                            "WHERE routine_id = :id " +
-                            "AND exercise_id = :exerciseId")
-                       .param("id", id)
-                       .param("exerciseId", exerciseId)
-                       .update();
+        int affectedRows = this.jdbcClient.sql("DELETE FROM routine_exercises " +
+                                               "WHERE routine_id = :id " +
+                                               "AND id = :routineExerciseId")
+                                          .param("id", id)
+                                          .param("routineExerciseId", routineExerciseId)
+                                          .update();
+
+        if  (affectedRows == 0) {
+            throw new NotFoundException("Ejercicio no encontrado para rutina especificada");
+        }
 
         return this.findById(id,
                              userId);
@@ -292,12 +306,16 @@ public class RoutineRepository {
                                                        Long setId,
                                                        Long routineExerciseId,
                                                        Long userId) {
-        this.jdbcClient.sql("DELETE FROM routine_sets " +
-                            "WHERE id = :setId " +
-                            "AND routine_exercise_id = :routineExerciseId")
-                       .param("setId", setId)
-                       .param("routineExerciseId", routineExerciseId)
-                       .update();
+        int affectedRows = this.jdbcClient.sql("DELETE FROM routine_sets " +
+                                               "WHERE id = :setId " +
+                                               "AND routine_exercise_id = :routineExerciseId")
+                                          .param("setId", setId)
+                                          .param("routineExerciseId", routineExerciseId)
+                                          .update();
+
+        if (affectedRows == 0) {
+            throw new NotFoundException("Set no encontrado para ejercicio especificado");
+        }
 
         return this.findById(id,
                              userId);
@@ -323,16 +341,20 @@ public class RoutineRepository {
                                                 Integer orderIndex,
                                                 String notes,
                                                 Long userId) {
-        this.jdbcClient.sql("UPDATE routine_exercises " +
-                            "SET exercise_id = COALESCE(:exerciseId, exercise_id), " +
-                                "order_index = COALESCE(:orderIndex, order_index), " +
-                                "notes = COALESCE(:notes, notes) " +
-                            "WHERE id = :routineExerciseId")
-                       .param("exerciseId", exerciseId)
-                       .param("orderIndex", orderIndex)
-                       .param("notes", notes)
-                       .param("routineExerciseId", routineExerciseId)
-                       .update();
+        int affectedRows = this.jdbcClient.sql("UPDATE routine_exercises " +
+                                               "SET exercise_id = COALESCE(:exerciseId, exercise_id), " +
+                                                   "order_index = COALESCE(:orderIndex, order_index), " +
+                                                   "notes = COALESCE(:notes, notes) " +
+                                               "WHERE id = :routineExerciseId")
+                                          .param("exerciseId", exerciseId)
+                                          .param("orderIndex", orderIndex)
+                                          .param("notes", notes)
+                                          .param("routineExerciseId", routineExerciseId)
+                                          .update();
+
+        if (affectedRows == 0) {
+            throw new NotFoundException("Ejercicio no encontrado para rutina especificada");
+        }
 
         return this.findById(id,
                              userId);
@@ -361,20 +383,24 @@ public class RoutineRepository {
                                                    Integer reps,
                                                    String notes,
                                                    Long userId) {
-        this.jdbcClient.sql("UPDATE routine_sets " +
-                            "SET set_number = COALESCE(:setNumber, set_number), " +
-                                "weight = COALESCE(:weight, weight), " +
-                                "reps = COALESCE(:reps, reps), " +
-                                "notes = COALESCE(:notes, notes) " +
-                            "WHERE id = :setId " +
-                            "AND routine_exercise_id = :routineExerciseId")
-                       .param("setNumber", setNumber)
-                       .param("weight", weight)
-                       .param("reps", reps)
-                       .param("notes", notes)
-                       .param("setId", setId)
-                       .param("routineExerciseId", routineExerciseId)
-                       .update();
+        int affectedRows = this.jdbcClient.sql("UPDATE routine_sets " +
+                                               "SET set_number = COALESCE(:setNumber, set_number), " +
+                                                   "weight = COALESCE(:weight, weight), " +
+                                                   "reps = COALESCE(:reps, reps), " +
+                                                   "notes = COALESCE(:notes, notes) " +
+                                               "WHERE id = :setId " +
+                                               "AND routine_exercise_id = :routineExerciseId")
+                                          .param("setNumber", setNumber)
+                                          .param("weight", weight)
+                                          .param("reps", reps)
+                                          .param("notes", notes)
+                                          .param("setId", setId)
+                                          .param("routineExerciseId", routineExerciseId)
+                                          .update();
+
+        if (affectedRows == 0) {
+            throw new NotFoundException("Set no encontrado para ejercicio especificado");
+        }
 
         return this.findById(id,
                              userId);

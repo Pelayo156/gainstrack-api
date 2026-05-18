@@ -1,5 +1,6 @@
 package com.molina.gainstrack.api.utils;
 
+import com.molina.gainstrack.api.exception.NotFoundException;
 import com.molina.gainstrack.api.model.User;
 import com.molina.gainstrack.api.repository.UserRepository;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -31,6 +32,6 @@ public class AuthUtils {
     public User getAuthenticatedUser() {
         String email = SecurityContextHolder.getContext().getAuthentication().getName();
         return userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+                .orElseThrow(() -> new NotFoundException("Usuario no encontrado"));
     }
 }

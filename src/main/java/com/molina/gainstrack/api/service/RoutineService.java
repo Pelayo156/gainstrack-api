@@ -1,6 +1,8 @@
 package com.molina.gainstrack.api.service;
 
 import com.molina.gainstrack.api.dto.routine.*;
+import com.molina.gainstrack.api.exception.ForbiddenException;
+import com.molina.gainstrack.api.exception.NotFoundException;
 import com.molina.gainstrack.api.model.User;
 import com.molina.gainstrack.api.repository.ExerciseRepository;
 import com.molina.gainstrack.api.repository.RoutineRepository;
@@ -99,7 +101,7 @@ public class RoutineService {
         RoutineDetailResponse routine = this.routineRepository.findById(id, user.getId());
 
         if (routine.isFree())
-            throw new RuntimeException("La rutina libre no se puede eliminar");
+            throw new ForbiddenException("La rutina libre no se puede eliminar");
 
         this.routineRepository.deleteById(id, user.getId());
     }
@@ -118,7 +120,7 @@ public class RoutineService {
         User user = this.authUtils.getAuthenticatedUser();
 
         if (!exerciseRepository.existsById(request.exerciseId()))
-            throw new RuntimeException("Ejercicio no encontrado");
+            throw new NotFoundException("Ejercicio no encontrado");
 
         return this.routineRepository.saveExercise(id,
                                                    request.exerciseId(),
@@ -136,21 +138,20 @@ public class RoutineService {
      * @throws RuntimeException si el ejercicio no pertenece a la rutina
      */
     public RoutineDetailResponse deleteExerciseById(Long id,
-                                                    Long exerciseId) {
+                                                    Long routineExerciseId) {
         User user = this.authUtils.getAuthenticatedUser();
         RoutineDetailResponse routine = this.routineRepository.findById(id,
                                                                         user.getId());
         boolean isExerciseFromRoutine = routine.exercises()
                                                .stream()
-                                               .anyMatch(routineExercise -> routineExercise.exercise()
-                                                                                                                 .id()
-                                                                                                                 .equals(exerciseId));
+                                               .anyMatch(routineExercise -> routineExercise.id()
+                                                                                                                 .equals(routineExerciseId));
 
         if (!isExerciseFromRoutine)
-            throw new RuntimeException("Ejercicio no pertenece a rutina especificada");
+            throw new NotFoundException("Ejercicio no encontrado para rutina especificada");
 
         return this.routineRepository.deleteExerciseById(id,
-                                                         exerciseId,
+                                                         routineExerciseId,
                                                          user.getId());
     }
 
@@ -171,14 +172,8 @@ public class RoutineService {
         User user = this.authUtils.getAuthenticatedUser();
         RoutineDetailResponse routine = this.routineRepository.findById(id,
                                                                         user.getId());
-        Long routineExerciseId = routine.exercises()
-                                        .stream()
-                                        .filter(routineExercise -> routineExercise.exercise()
-                                                                                                        .id()
-                                                                                                        .equals(exerciseId))
-                                        .map(RoutineExerciseResponse::id)
-                                        .findFirst()
-                                        .orElseThrow(() -> new RuntimeException("Ejercicio no pertenece a rutina especificada"));
+
+        Long routineExerciseId = this.findRoutineExerciseId(routine, exerciseId);
 
         return this.routineRepository.saveExerciseSet(id,
                                                       routineExerciseId,
@@ -202,14 +197,8 @@ public class RoutineService {
         User user = this.authUtils.getAuthenticatedUser();
         RoutineDetailResponse routine = this.routineRepository.findById(id,
                                                                         user.getId());
-        Long routineExerciseId = routine.exercises()
-                                        .stream()
-                                        .filter(routineExercise -> routineExercise.exercise()
-                                                                                                        .id()
-                                                                                                        .equals(exerciseId))
-                                        .map(RoutineExerciseResponse::id)
-                                        .findFirst()
-                                        .orElseThrow(() -> new RuntimeException("Ejercicio no pertenece a rutina especificada"));
+
+        Long routineExerciseId = this.findRoutineExerciseId(routine, exerciseId);
 
         return this.routineRepository.deleteExerciseSetById(id,
                                                             setId,
@@ -235,14 +224,8 @@ public class RoutineService {
         RoutineDetailResponse routine = this.routineRepository.findById(id,
                                                                         user.getId());
 
-        Long routineExerciseId = routine.exercises()
-                                        .stream()
-                                        .filter(routineExercise -> routineExercise.exercise()
-                                                                                                        .id()
-                                                                                                        .equals(exerciseId))
-                                        .map(RoutineExerciseResponse::id)
-                                        .findFirst()
-                                        .orElseThrow(() -> new RuntimeException("Ejercicio no pertenece a rutina especificada"));
+        Long routineExerciseId = this.findRoutineExerciseId(routine, exerciseId);
+
         return this.routineRepository.updateExercise(id,
                                                      routineExerciseId,
                                                      exerciseId,
@@ -270,14 +253,7 @@ public class RoutineService {
         RoutineDetailResponse routine = this.routineRepository.findById(id,
                                                                         user.getId());
 
-        Long routineExerciseId = routine.exercises()
-                                        .stream()
-                                        .filter(routineExercise -> routineExercise.exercise()
-                                                                                                        .id()
-                                                                                                        .equals(exerciseId))
-                                        .map(RoutineExerciseResponse::id)
-                                        .findFirst()
-                                        .orElseThrow(() -> new RuntimeException("Ejercicio no pertenece a rutina especificada"));
+        Long routineExerciseId = this.findRoutineExerciseId(routine, exerciseId);
 
         return this.routineRepository.updateExerciseSet(id,
                                                         setId,
@@ -287,5 +263,16 @@ public class RoutineService {
                                                         request.reps(),
                                                         request.notes(),
                                                         user.getId());
+    }
+
+    private Long findRoutineExerciseId(RoutineDetailResponse routine, Long exerciseId) {
+        return routine.exercises()
+                      .stream()
+                      .filter(routineExercise -> routineExercise.exercise()
+                                                                                      .id()
+                                                                                      .equals(exerciseId))
+                      .map(RoutineExerciseResponse::id)
+                      .findFirst()
+                      .orElseThrow(() -> new NotFoundException("Ejercicio no encontrado para rutina especificada"));
     }
 }

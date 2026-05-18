@@ -4,6 +4,7 @@ import com.molina.gainstrack.api.dto.exercise.ExerciseResponse;
 import com.molina.gainstrack.api.dto.gym.GymResponse;
 import com.molina.gainstrack.api.dto.session.*;
 import com.molina.gainstrack.api.dto.shared.MuscleGroupResponse;
+import com.molina.gainstrack.api.exception.NotFoundException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
@@ -226,7 +227,8 @@ public class TrainingSessionRepository {
                             sessionExercises
                     );
                 })
-                .single();
+                .optional()
+                .orElseThrow(() -> new NotFoundException("Sesión de entrenamiento no encontrada"));
     }
 
     /**
@@ -239,11 +241,15 @@ public class TrainingSessionRepository {
      * @param userId id del usuario propietario — previene eliminación de sesiones ajenas
      */
     public void deleteById(Long id, Long userId) {
-        jdbcClient.sql("DELETE FROM training_sessions " +
-                       "WHERE id = :id AND user_id = :userId")
-                  .param("id", id)
-                  .param("userId", userId)
-                  .update();
+        int affectedRows = jdbcClient.sql("DELETE FROM training_sessions " +
+                                          "WHERE id = :id AND user_id = :userId")
+                                     .param("id", id)
+                                     .param("userId", userId)
+                                     .update();
+
+        if (affectedRows == 0) {
+            throw new NotFoundException("Sesión de entrenamiento no encontrada");
+        }
     }
 
     /**

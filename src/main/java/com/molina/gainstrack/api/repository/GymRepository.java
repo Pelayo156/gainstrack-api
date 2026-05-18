@@ -1,6 +1,7 @@
 package com.molina.gainstrack.api.repository;
 
 import com.molina.gainstrack.api.dto.gym.GymResponse;
+import com.molina.gainstrack.api.exception.NotFoundException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -39,9 +40,10 @@ public class GymRepository {
                   .update();
 
         return jdbcClient.sql("SELECT id, name FROM gyms WHERE user_id = :userId ORDER BY id DESC LIMIT 1")
-                .param("userId", userId)
-                .query(GymResponse.class)
-                .single();
+                         .param("userId", userId)
+                         .query(GymResponse.class)
+                         .optional()
+                         .orElseThrow(() -> new NotFoundException("Sesión no encontrada"));
     }
 
     /**
@@ -66,9 +68,13 @@ public class GymRepository {
      * @param userId id del usuario propietario
      */
     public void deleteById(Long id, Long userId) {
-        jdbcClient.sql("DELETE FROM gyms WHERE id = :id AND user_id = :userId")
-                  .param("id", id)
-                  .param("userId", userId)
-                  .update();
+        int affectedRows = jdbcClient.sql("DELETE FROM gyms WHERE id = :id AND user_id = :userId")
+                                     .param("id", id)
+                                     .param("userId", userId)
+                                     .update();
+
+        if (affectedRows == 0) {
+            throw new NotFoundException("Gimnasio no encontrado");
+        }
     }
 }

@@ -105,9 +105,6 @@ CREATE TABLE routines (
                                 REFERENCES users(id) ON DELETE CASCADE
 );
 
-USE GAINSTRACK;
-SELECT * FROM routines;
-
 CREATE INDEX idx_routines_user_id ON routines(user_id);
 
 
@@ -173,6 +170,7 @@ CREATE INDEX idx_routine_sets_routine_exercise_id
 -- CASCADE en routine: al eliminar rutina se eliminan sus sesiones.
 -- CASCADE en gym: al eliminar gym se eliminan sus sesiones.
 -- CASCADE en user: al eliminar usuario se eliminan sus sesiones.
+-- ------------------------------------------------------------
 -- ------------------------------------------------------------
 CREATE TABLE training_sessions (
     id           BIGINT    NOT NULL AUTO_INCREMENT,
@@ -306,5 +304,3 @@ DROP TABLE IF EXISTS users;
 DROP TABLE IF EXISTS muscle_groups;
 
 SET FOREIGN_KEY_CHECKS = 1;
-
-SELECT * FROM training_sessions;

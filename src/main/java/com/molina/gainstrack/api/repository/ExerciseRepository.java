@@ -2,6 +2,7 @@ package com.molina.gainstrack.api.repository;
 
 import com.molina.gainstrack.api.dto.exercise.ExerciseResponse;
 import com.molina.gainstrack.api.dto.shared.MuscleGroupResponse;
+import com.molina.gainstrack.api.exception.NotFoundException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -108,15 +109,19 @@ public class ExerciseRepository {
      * @param userId        id del usuario propietario — previene edición de ejercicios ajenos
      */
     public void update(Long id, String name, Long muscleGroupId, Long userId) {
-        jdbcClient.sql("UPDATE exercises " +
-                       "SET muscle_group_id = :muscleGroupId, name = :name " +
-                       "WHERE id = :id " +
-                       "AND user_id = :userId")
-                  .param("muscleGroupId", muscleGroupId)
-                  .param("name", name)
-                  .param("id", id)
-                  .param("userId", userId)
-                  .update();
+        int affectedRows =  jdbcClient.sql("UPDATE exercises " +
+                                           "SET muscle_group_id = :muscleGroupId, name = :name " +
+                                           "WHERE id = :id " +
+                                           "AND user_id = :userId")
+                                      .param("muscleGroupId", muscleGroupId)
+                                      .param("name", name)
+                                      .param("id", id)
+                                      .param("userId", userId)
+                                      .update();
+
+        if (affectedRows == 0) {
+            throw new NotFoundException("Ejercicio no encontrado");
+        }
     }
 
     /**
@@ -129,12 +134,16 @@ public class ExerciseRepository {
      * @param userId id del usuario propietario — previene eliminación de ejercicios ajenos
      */
     public void deleteById(Long id, Long userId) {
-        jdbcClient.sql("UPDATE exercises " +
-                       "SET deleted_at = NOW() " +
-                       "WHERE id = :id AND user_id = :userId")
-                .param("id", id)
-                .param("userId", userId)
-                .update();
+        int affectedRows = jdbcClient.sql("UPDATE exercises " +
+                                          "SET deleted_at = NOW() " +
+                                          "WHERE id = :id AND user_id = :userId")
+                                     .param("id", id)
+                                     .param("userId", userId)
+                                     .update();
+
+        if  (affectedRows == 0) {
+            throw new NotFoundException("Ejercicio no encontrado");
+        }
     }
 
     public boolean existsById(Long id) {

@@ -109,11 +109,11 @@ public class RoutineController {
      * @param exerciseId id del ejercicio a eliminar
      * @return 200 OK con la rutina actualizada
      */
-    @DeleteMapping("/{id}/exercises/{exerciseId}")
+    @DeleteMapping("/{id}/exercises/{routineExerciseId}")
     public ResponseEntity<RoutineDetailResponse> deleteExerciseById(@PathVariable("id") Long id,
-                                                                    @PathVariable("exerciseId") Long exerciseId) {
+                                                                    @PathVariable("routineExerciseId") Long routineExerciseId) {
         return ResponseEntity.ok().body(this.routineService.deleteExerciseById(id,
-                                                                               exerciseId));
+                                                                               routineExerciseId));
     }
 
     /**
