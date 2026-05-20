@@ -419,4 +419,19 @@ public class RoutineRepository {
                        .param("userId", userId)
                        .update();
     }
+
+    /**
+     * Elimina todos los sets asociados a un ejercicio de una rutina.
+     * Se utiliza cuando el ejercicio de una rutina es reemplazado por otro,
+     * ya que los sets del ejercicio anterior no son relevantes para el nuevo.
+     *
+     * @param routineExerciseId id del registro en routine_exercises
+     *                          cuyos sets serán eliminados
+     */
+    public void deleteSetsFromRoutineExercise(Long routineExerciseId) {
+        this.jdbcClient.sql("DELETE FROM routine_sets " +
+                            "WHERE routine_exercise_id = :routineExerciseId")
+                       .param("routineExerciseId", routineExerciseId)
+                       .update();
+    }
 }

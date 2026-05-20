@@ -1,6 +1,5 @@
 package com.molina.gainstrack.api.service;
 
-import com.molina.gainstrack.api.dto.exercise.ExerciseResponse;
 import com.molina.gainstrack.api.dto.routine.*;
 import com.molina.gainstrack.api.exception.ForbiddenException;
 import com.molina.gainstrack.api.exception.NotFoundException;
@@ -132,11 +131,13 @@ public class RoutineService {
     /**
      * Elimina un ejercicio de una rutina del usuario autenticado.
      * Valida que el ejercicio pertenezca a la rutina antes de eliminar.
+     * Por el CASCADE del modelo relacional, se eliminan también
+     * todos los sets asociados al ejercicio eliminado.
      *
-     * @param id         id de la rutina
-     * @param exerciseId id del ejercicio a eliminar
+     * @param id                id de la rutina
+     * @param routineExerciseId id del registro en routine_exercises a eliminar
      * @return RoutineDetailResponse con la rutina actualizada
-     * @throws RuntimeException si el ejercicio no pertenece a la rutina
+     * @throws NotFoundException si el routineExerciseId no pertenece a la rutina
      */
     public RoutineDetailResponse deleteExerciseById(Long id,
                                                     Long routineExerciseId) {
@@ -158,14 +159,15 @@ public class RoutineService {
 
     /**
      * Agrega un set vacío a un ejercicio de una rutina del usuario autenticado.
-     * Valida que el ejercicio pertenezca a la rutina antes de insertar.
-     * El set se crea con peso 0 y reps 0 para ser editado posteriormente.
+     * Valida que el routineExerciseId pertenezca a la rutina antes de insertar.
+     * El set se crea con peso 0 y reps 0 para ser editado posteriormente
+     * con los valores reales del entrenamiento.
      *
-     * @param id         id de la rutina
-     * @param exerciseId id del ejercicio al que agregar el set
-     * @param request    datos del set — solo setNumber
+     * @param id                id de la rutina
+     * @param routineExerciseId id del registro en routine_exercises al que agregar el set
+     * @param request           datos del set — solo setNumber obligatorio
      * @return RoutineDetailResponse con la rutina actualizada
-     * @throws RuntimeException si el ejercicio no pertenece a la rutina
+     * @throws NotFoundException si el routineExerciseId no pertenece a la rutina
      */
     public RoutineDetailResponse saveExerciseSet(Long id,
                                                  Long routineExerciseId,
@@ -190,13 +192,13 @@ public class RoutineService {
 
     /**
      * Elimina un set de un ejercicio de una rutina del usuario autenticado.
-     * Valida que el ejercicio pertenezca a la rutina antes de eliminar.
+     * Valida que el routineExerciseId pertenezca a la rutina antes de eliminar.
      *
-     * @param id         id de la rutina
-     * @param exerciseId id del ejercicio al que pertenece el set
-     * @param setId      id del set a eliminar
+     * @param id                id de la rutina
+     * @param routineExerciseId id del registro en routine_exercises al que pertenece el set
+     * @param setId             id del set a eliminar
      * @return RoutineDetailResponse con la rutina actualizada
-     * @throws RuntimeException si el ejercicio no pertenece a la rutina
+     * @throws NotFoundException si el routineExerciseId no pertenece a la rutina
      */
     public RoutineDetailResponse deleteExerciseSetById(Long id,
                                                        Long routineExerciseId,
@@ -222,13 +224,14 @@ public class RoutineService {
     /**
      * Actualiza los datos de un ejercicio dentro de una rutina del usuario autenticado.
      * Solo actualiza los campos enviados — campos null conservan su valor actual.
-     * Permite reemplazar el ejercicio, cambiar su orden o actualizar sus notas.
+     * Si se cambia el exerciseId, elimina automáticamente los sets existentes
+     * ya que pertenecían al ejercicio anterior.
      *
-     * @param id         id de la rutina
-     * @param exerciseId id del ejercicio a actualizar
-     * @param request    campos a actualizar — exerciseId, orderIndex y/o notes
+     * @param id                id de la rutina
+     * @param routineExerciseId id del registro en routine_exercises a actualizar
+     * @param request           campos a actualizar — exerciseId, orderIndex y/o notes
      * @return RoutineDetailResponse con la rutina actualizada
-     * @throws RuntimeException si el ejercicio no pertenece a la rutina
+     * @throws NotFoundException si el routineExerciseId no pertenece a la rutina
      */
     public RoutineDetailResponse updateExercise(Long id,
                                                 Long routineExerciseId,
@@ -246,17 +249,7 @@ public class RoutineService {
                                         .orElseThrow(() -> new NotFoundException("Ejercicio no encontrado para rutina especificada"));
 
         if (request.exerciseId() != null && !currentExerciseId.equals(request.exerciseId())) {
-            routine.exercises()
-                   .stream()
-                   .filter(routineExercise -> routineExercise.id()
-                                                                                   .equals(routineExerciseId))
-                   .findFirst()
-                   .map(routineExerciseResponse -> routineExerciseResponse.sets()
-                                                                                                .stream()
-                                                                                                .map(routineExerciseSet -> this.routineRepository.deleteExerciseSetById(id,
-                                                                                                                                                                                    routineExerciseSet.id(),
-                                                                                                                                                                                    routineExerciseId,
-                                                                                                                                                                                    user.getId())));
+            this.routineRepository.deleteSetsFromRoutineExercise(routineExerciseId);
         }
 
         return this.routineRepository.updateExercise(id,
@@ -271,12 +264,12 @@ public class RoutineService {
      * Actualiza los datos de un set de un ejercicio de una rutina del usuario autenticado.
      * Solo actualiza los campos enviados — campos null conservan su valor actual.
      *
-     * @param id         id de la rutina
-     * @param exerciseId id del ejercicio al que pertenece el set
-     * @param setId      id del set a actualizar
-     * @param request    campos a actualizar — setNumber, weight, reps y/o notes
+     * @param id                id de la rutina
+     * @param routineExerciseId id del registro en routine_exercises al que pertenece el set
+     * @param setId             id del set a actualizar
+     * @param request           campos a actualizar — setNumber, weight, reps y/o notes
      * @return RoutineDetailResponse con la rutina actualizada
-     * @throws RuntimeException si el ejercicio no pertenece a la rutina
+     * @throws NotFoundException si el routineExerciseId no pertenece a la rutina
      */
     public RoutineDetailResponse updateExerciseSet(Long id,
                                                    Long routineExerciseId,
@@ -289,7 +282,7 @@ public class RoutineService {
         routine.exercises()
                 .stream()
                 .filter(routineExercise -> routineExercise.id()
-                        .equals(routineExerciseId))
+                                                                                .equals(routineExerciseId))
                 .map(exerciseResponse -> exerciseResponse.exercise().id())
                 .findFirst()
                 .orElseThrow(() -> new NotFoundException("Ejercicio no encontrado para rutina especificada"));

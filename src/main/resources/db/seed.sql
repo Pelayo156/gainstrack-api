@@ -344,7 +344,6 @@ INSERT INTO routine_sets (routine_exercise_id, set_number, weight, reps, notes) 
 -- 8. training_sessions
 -- Sesiones ejecutadas por John — últimas 4 semanas
 -- ------------------------------------------------------------
-SELECT * FROM gyms;
 INSERT INTO training_sessions (user_id, routine_id, gym_id, session_date, notes) VALUES
 
 -- Semana 1
