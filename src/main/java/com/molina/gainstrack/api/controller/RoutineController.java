@@ -125,12 +125,12 @@ public class RoutineController {
      * @param request    body con setNumber
      * @return 201 Created con la rutina actualizada
      */
-    @PostMapping("/{id}/exercises/{exerciseId}/sets")
+    @PostMapping("/{id}/exercises/{routineExerciseId}/sets")
     public ResponseEntity<RoutineDetailResponse> saveExerciseSet(@PathVariable("id") Long id,
-                                                                 @PathVariable("exerciseId") Long exerciseId,
+                                                                 @PathVariable("routineExerciseId") Long routineExerciseId,
                                                                  @RequestBody RoutineSetRequest request) {
         return ResponseEntity.status(201).body(this.routineService.saveExerciseSet(id,
-                                                                                   exerciseId,
+                                                                                   routineExerciseId,
                                                                                    request));
     }
 
@@ -142,12 +142,12 @@ public class RoutineController {
      * @param setId      id del set a eliminar
      * @return 200 OK con la rutina actualizada
      */
-    @DeleteMapping("/{id}/exercises/{exerciseId}/sets/{setId}")
+    @DeleteMapping("/{id}/exercises/{routineExerciseId}/sets/{setId}")
     public ResponseEntity<RoutineDetailResponse> deleteExerciseSetById(@PathVariable("id") Long id,
-                                                                       @PathVariable("exerciseId") Long exerciseId,
+                                                                       @PathVariable("routineExerciseId") Long routineExerciseId,
                                                                        @PathVariable("setId") Long setId) {
         return ResponseEntity.ok().body(this.routineService.deleteExerciseSetById(id,
-                                                                                  exerciseId,
+                                                                                  routineExerciseId,
                                                                                   setId));
     }
 
@@ -160,12 +160,12 @@ public class RoutineController {
      * @param request    body con exerciseId, orderIndex y/o notes — todos opcionales
      * @return 200 OK con la rutina actualizada
      */
-    @PatchMapping("/{id}/exercises/{exerciseId}")
+    @PatchMapping("/{id}/exercises/{routineExerciseId}")
     public ResponseEntity<RoutineDetailResponse> updateExercise(@PathVariable("id") Long id,
-                                                                @PathVariable("exerciseId") Long exerciseId,
-                                                                @RequestBody RoutineExerciseUpdateRequest request) {
+                                                                @PathVariable("routineExerciseId") Long routineExerciseId,
+                                                                @RequestBody RoutineExerciseRequest request) {
         return ResponseEntity.ok().body(this.routineService.updateExercise(id,
-                                                                           exerciseId,
+                                                                           routineExerciseId,
                                                                            request));
     }
 
