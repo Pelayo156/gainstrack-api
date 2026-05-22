@@ -14,9 +14,9 @@ import java.util.List;
  * @param exercise   datos del ejercicio del catálogo
  * @param sets       lista de sets realizados en este ejercicio
  */
-public record SessionExerciseResponse(Long id,
-                                      Integer orderIndex,
-                                      String notes,
-                                      ExerciseResponse exercise,
-                                      List<SetResponse> sets) {
+public record TrainingSessionExerciseResponse(Long id,
+                                              Integer orderIndex,
+                                              String notes,
+                                              ExerciseResponse exercise,
+                                              List<SetResponse> sets) {
 }

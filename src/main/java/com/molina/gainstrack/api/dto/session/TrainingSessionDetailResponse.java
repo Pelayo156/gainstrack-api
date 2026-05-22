@@ -19,4 +19,4 @@ public record TrainingSessionDetailResponse(Long id,
                                             GymResponse gym,
                                             LocalDate sessionDate,
                                             String notes,
-                                            List<SessionExerciseResponse> exercises) {}
+                                            List<TrainingSessionExerciseResponse> exercises) {}

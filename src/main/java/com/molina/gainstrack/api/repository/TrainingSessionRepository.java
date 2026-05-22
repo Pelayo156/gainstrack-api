@@ -169,7 +169,7 @@ public class TrainingSessionRepository {
                             : new GymResponse(null, "No especificado");
 
                     // Query 2: ejercicios de la sesión
-                    List<SessionExerciseResponse> sessionExercises =
+                    List<TrainingSessionExerciseResponse> sessionExercises =
                             jdbcClient.sql("SELECT se.id AS session_exercise_id, " +
                                                   "se.order_index AS session_exercise_order_index, " +
                                                   "se.notes AS session_exercise_notes, " +
@@ -200,7 +200,7 @@ public class TrainingSessionRepository {
                                                         ))
                                                         .list();
 
-                                        return new SessionExerciseResponse(
+                                        return new TrainingSessionExerciseResponse(
                                                 rs2.getLong("session_exercise_id"),
                                                 rs2.getInt("session_exercise_order_index"),
                                                 rs2.getString("session_exercise_notes"),
@@ -250,6 +250,245 @@ public class TrainingSessionRepository {
         if (affectedRows == 0) {
             throw new NotFoundException("Sesión de entrenamiento no encontrada");
         }
+    }
+
+    /**
+     * Actualiza las notas de una sesión de entrenamiento.
+     * Usa COALESCE para preservar el valor actual si notes llega null.
+     * El userId garantiza que el usuario solo pueda editar sus propias sesiones.
+     *
+     * @param id     id de la sesión a actualizar
+     * @param userId id del usuario propietario — previene edición de sesiones ajenas
+     * @param notes  nuevas notas — puede ser null para mantener las actuales
+     * @throws NotFoundException si la sesión no existe o no pertenece al usuario
+     */
+    public void update(Long id, Long userId, String notes) {
+        int affectedRows = this.jdbcClient.sql("UPDATE training_sessions " +
+                                               "SET notes = COALESCE(:notes, notes) " +
+                                               "WHERE id = :id " +
+                                               "AND user_id = :userId")
+                                          .param("notes", notes)
+                                          .param("id", id)
+                                          .param("userId", userId)
+                                          .update();
+
+        if (affectedRows == 0) {
+            throw new NotFoundException("Sesión no encontrada");
+        }
+    }
+
+    /**
+     * Agrega un ejercicio a una sesión de entrenamiento.
+     * El ejercicio se inserta con notas nulas — se editan posteriormente.
+     * Retorna el detalle completo de la sesión actualizada.
+     *
+     * @param id         id de la sesión
+     * @param exerciseId id del ejercicio del catálogo a agregar
+     * @param orderIndex posición del ejercicio dentro de la sesión
+     * @param userId     id del usuario propietario
+     * @return TrainingSessionDetailResponse con la sesión actualizada
+     */
+    public TrainingSessionDetailResponse saveExercise(Long id,
+                                                      Long exerciseId,
+                                                      Integer orderIndex,
+                                                      Long userId) {
+        this.jdbcClient.sql("INSERT INTO session_exercises (session_id, exercise_id, order_index, notes) " +
+                            "VALUES (:id, :exerciseId, :orderIndex, NULL)")
+                       .param("id", id)
+                       .param("exerciseId", exerciseId)
+                       .param("orderIndex", orderIndex)
+                       .update();
+
+        return this.findById(id, userId);
+    }
+
+    /**
+     * Elimina un ejercicio de una sesión de entrenamiento.
+     * Por el CASCADE del modelo relacional, se eliminan también
+     * todos los sets asociados al ejercicio eliminado.
+     * Retorna el detalle completo de la sesión actualizada.
+     *
+     * @param id                 id de la sesión
+     * @param sessionExerciseId  id del registro en session_exercises a eliminar
+     * @param userId             id del usuario propietario
+     * @return TrainingSessionDetailResponse con la sesión actualizada
+     * @throws NotFoundException si el ejercicio no existe en la sesión
+     */
+    public TrainingSessionDetailResponse deleteExerciseById(Long id,
+                                                            Long sessionExerciseId,
+                                                            Long userId) {
+        int affectedRows = this.jdbcClient.sql("DELETE FROM session_exercises " +
+                                               "WHERE session_id = :id " +
+                                               "AND id = :sessionExerciseId")
+                                          .param("id", id)
+                                          .param("sessionExerciseId", sessionExerciseId)
+                                          .update();
+
+        if  (affectedRows == 0) {
+            throw new NotFoundException("Ejercicio no encontrado para sesión especificada");
+        }
+
+        return this.findById(id,
+                             userId);
+    }
+
+    /**
+     * Actualiza los datos de un ejercicio dentro de una sesión.
+     * Usa COALESCE para actualizar solo los campos enviados.
+     * Si se cambia el exerciseId, los sets deben eliminarse previamente
+     * desde el service antes de llamar este método.
+     * Retorna el detalle completo de la sesión actualizada.
+     *
+     * @param id                id de la sesión
+     * @param sessionExerciseId id del registro en session_exercises a actualizar
+     * @param exerciseId        nuevo ejercicio — puede ser null para mantener el actual
+     * @param orderIndex        nueva posición — puede ser null para mantener la actual
+     * @param notes             nuevas notas — puede ser null para mantener las actuales
+     * @param userId            id del usuario propietario
+     * @return TrainingSessionDetailResponse con la sesión actualizada
+     * @throws NotFoundException si el ejercicio no existe en la sesión
+     */
+    public TrainingSessionDetailResponse updateExercise(Long id,
+                                                        Long sessionExerciseId,
+                                                        Long exerciseId,
+                                                        Integer orderIndex,
+                                                        String notes,
+                                                        Long userId) {
+        int affectedRows = this.jdbcClient.sql("UPDATE session_exercises " +
+                                               "SET exercise_id = COALESCE(:exerciseId, exercise_id), " +
+                                                   "order_index = COALESCE(:orderIndex, order_index), " +
+                                                   "notes = COALESCE(:notes, notes) " +
+                                               "WHERE id = :sessionExerciseId")
+                .param("exerciseId", exerciseId)
+                .param("orderIndex", orderIndex)
+                .param("notes", notes)
+                .param("sessionExerciseId", sessionExerciseId)
+                .update();
+
+        if (affectedRows == 0) {
+            throw new NotFoundException("Ejercicio no encontrado para sesión especificada");
+        }
+
+        return this.findById(id,
+                             userId);
+    }
+
+    /**
+     * Agrega un set vacío a un ejercicio de una sesión.
+     * El set se crea con peso 0 y reps 0 para ser editado
+     * con los valores reales del entrenamiento.
+     * Retorna el detalle completo de la sesión actualizada.
+     *
+     * @param id                id de la sesión
+     * @param sessionExerciseId id del registro en session_exercises
+     * @param setNumber         número de serie dentro del ejercicio
+     * @param userId            id del usuario propietario
+     * @return TrainingSessionDetailResponse con la sesión actualizada
+     */
+    public TrainingSessionDetailResponse saveExerciseSet(Long id,
+                                                         Long sessionExerciseId,
+                                                         Integer setNumber,
+                                                         Long userId) {
+        this.jdbcClient.sql("INSERT INTO sets (session_exercise_id, set_number, weight, reps, notes) " +
+                            "VALUES (:sessionExerciseId, :setNumber, 0, 0, NULL)")
+                .param("sessionExerciseId", sessionExerciseId)
+                .param("setNumber", setNumber)
+                .update();
+
+        return this.findById(id,
+                             userId);
+    }
+
+    /**
+     * Elimina un set de un ejercicio de una sesión.
+     * Retorna el detalle completo de la sesión actualizada.
+     *
+     * @param id                id de la sesión
+     * @param setId             id del set a eliminar
+     * @param sessionExerciseId id del registro en session_exercises
+     * @param userId            id del usuario propietario
+     * @return TrainingSessionDetailResponse con la sesión actualizada
+     * @throws NotFoundException si el set no existe para el ejercicio especificado
+     */
+    public TrainingSessionDetailResponse deleteExerciseSetById(Long id,
+                                                               Long setId,
+                                                               Long sessionExerciseId,
+                                                               Long userId) {
+        int affectedRows = this.jdbcClient.sql("DELETE FROM sets " +
+                                               "WHERE id = :setId " +
+                                               "AND session_exercise_id = :sessionExerciseId")
+                                          .param("setId", setId)
+                                          .param("sessionExerciseId", sessionExerciseId)
+                                          .update();
+
+        if (affectedRows == 0) {
+            throw new NotFoundException("Set no encontrado para ejercicio especificado");
+        }
+
+        return this.findById(id,
+                             userId);
+    }
+
+    /**
+     * Actualiza los datos de un set de un ejercicio de una sesión.
+     * Usa COALESCE para actualizar solo los campos enviados.
+     * Retorna el detalle completo de la sesión actualizada.
+     *
+     * @param id                id de la sesión
+     * @param setId             id del set a actualizar
+     * @param sessionExerciseId id del registro en session_exercises
+     * @param setNumber         nuevo número de serie — puede ser null
+     * @param weight            nuevo peso en kg — puede ser null
+     * @param reps              nuevas repeticiones — puede ser null
+     * @param notes             nuevas notas — puede ser null
+     * @param userId            id del usuario propietario
+     * @return TrainingSessionDetailResponse con la sesión actualizada
+     * @throws NotFoundException si el set no existe para el ejercicio especificado
+     */
+    public TrainingSessionDetailResponse updateExerciseSet(Long id,
+                                                           Long setId,
+                                                           Long sessionExerciseId,
+                                                           Integer setNumber,
+                                                           Double weight,
+                                                           Integer reps,
+                                                           String notes,
+                                                           Long userId) {
+        int affectedRows = this.jdbcClient.sql("UPDATE sets " +
+                                               "SET set_number = COALESCE(:setNumber, set_number), " +
+                                                   "weight = COALESCE(:weight, weight), " +
+                                                   "reps = COALESCE(:reps, reps), " +
+                                                   "notes = COALESCE(:notes, notes) " +
+                                               "WHERE id = :setId " +
+                                               "AND session_exercise_id = :sessionExerciseId")
+                                          .param("setNumber", setNumber)
+                                          .param("weight", weight)
+                                          .param("reps", reps)
+                                          .param("notes", notes)
+                                          .param("setId", setId)
+                                          .param("sessionExerciseId", sessionExerciseId)
+                                          .update();
+
+        if (affectedRows == 0) {
+            throw new NotFoundException("Set no encontrado para ejercicio especificado");
+        }
+
+        return this.findById(id,
+                             userId);
+    }
+
+    /**
+     * Elimina todos los sets asociados a un ejercicio de una sesión.
+     * Se utiliza cuando el ejercicio de una sesión es reemplazado por otro,
+     * ya que los sets del ejercicio anterior no son relevantes para el nuevo.
+     *
+     * @param sessionExerciseId id del registro en session_exercises
+     *                          cuyos sets serán eliminados
+     */
+    public void deleteSetsFromSessionExercise(Long sessionExerciseId) {
+        this.jdbcClient.sql("DELETE FROM sets " +
+                            "WHERE session_exercise_id = :sessionExerciseId")
+                       .param("sessionExerciseId", sessionExerciseId)
+                       .update();
     }
 
     /**

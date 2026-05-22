@@ -1,9 +1,9 @@
 package com.molina.gainstrack.api.service;
 
-import com.molina.gainstrack.api.dto.session.TrainingSessionDetailResponse;
-import com.molina.gainstrack.api.dto.session.TrainingSessionRequest;
-import com.molina.gainstrack.api.dto.session.TrainingSessionSummaryResponse;
+import com.molina.gainstrack.api.dto.session.*;
+import com.molina.gainstrack.api.exception.NotFoundException;
 import com.molina.gainstrack.api.model.User;
+import com.molina.gainstrack.api.repository.ExerciseRepository;
 import com.molina.gainstrack.api.repository.TrainingSessionRepository;
 import com.molina.gainstrack.api.utils.AuthUtils;
 import org.springframework.stereotype.Service;
@@ -19,6 +19,7 @@ import java.util.List;
 public class TrainingSessionService {
 
     private final TrainingSessionRepository trainingSessionRepository;
+    private final ExerciseRepository exerciseRepository;
     private final AuthUtils authUtils;
 
     /**
@@ -26,8 +27,10 @@ public class TrainingSessionService {
      * @param authUtils                 utilidad para obtener el usuario autenticado
      */
     public TrainingSessionService(TrainingSessionRepository trainingSessionRepository,
+                                  ExerciseRepository exerciseRepository,
                                   AuthUtils authUtils) {
         this.trainingSessionRepository = trainingSessionRepository;
+        this.exerciseRepository = exerciseRepository;
         this.authUtils = authUtils;
     }
 
@@ -81,5 +84,210 @@ public class TrainingSessionService {
     public void deleteById(Long id) {
         User user = this.authUtils.getAuthenticatedUser();
         trainingSessionRepository.deleteById(id, user.getId());
+    }
+
+    /**
+     * Actualiza las notas de una sesión del usuario autenticado.
+     * Solo modifica el campo notes — la fecha y rutina son inmutables.
+     *
+     * @param id      id de la sesión a actualizar
+     * @param request datos a actualizar — solo notes
+     * @throws NotFoundException si la sesión no existe
+     */
+    public void update(Long id,
+                       TrainingSessionNotesRequest request) {
+        User user = this.authUtils.getAuthenticatedUser();
+        this.trainingSessionRepository.update(id,
+                                              user.getId(),
+                                              request.notes());
+    }
+
+    /**
+     * Agrega un ejercicio a una sesión del usuario autenticado.
+     * Valida que el ejercicio exista en el catálogo antes de insertarlo.
+     *
+     * @param id      id de la sesión
+     * @param request datos del ejercicio a agregar — exerciseId y orderIndex
+     * @return TrainingSessionDetailResponse con la sesión actualizada
+     * @throws NotFoundException si el ejercicio no existe en el catálogo
+     */
+    public TrainingSessionDetailResponse saveExercise(Long id,
+                                                      TrainingSessionExerciseRequest request) {
+        User user = this.authUtils.getAuthenticatedUser();
+
+        if (!exerciseRepository.existsById(request.exerciseId()))
+            throw new NotFoundException("Ejercicio no encontrado");
+
+        return this.trainingSessionRepository.saveExercise(id,
+                                                           request.exerciseId(),
+                                                           request.orderIndex(),
+                                                           user.getId());
+    }
+
+    /**
+     * Elimina un ejercicio de una sesión del usuario autenticado.
+     * Valida que el ejercicio pertenezca a la sesión antes de eliminar.
+     * Por el CASCADE del modelo relacional, se eliminan también sus sets.
+     *
+     * @param id                id de la sesión
+     * @param sessionExerciseId id del registro en session_exercises a eliminar
+     * @return TrainingSessionDetailResponse con la sesión actualizada
+     * @throws NotFoundException si el sessionExerciseId no pertenece a la sesión
+     */
+    public TrainingSessionDetailResponse deleteExerciseById(Long id,
+                                                            Long sessionExerciseId) {
+        User user = this.authUtils.getAuthenticatedUser();
+        TrainingSessionDetailResponse session = this.trainingSessionRepository.findById(id,
+                                                                                        user.getId());
+        boolean isExerciseFromSession = session.exercises()
+                                               .stream()
+                                               .anyMatch(sessionExercise -> sessionExercise.id()
+                                                                                                                 .equals(sessionExerciseId));
+
+        if (!isExerciseFromSession)
+            throw new NotFoundException("Ejercicio no encontrado para sesión especificada");
+
+        return this.trainingSessionRepository.deleteExerciseById(id,
+                                                                 sessionExerciseId,
+                                                                 user.getId());
+    }
+
+    /**
+     * Actualiza los datos de un ejercicio dentro de una sesión del usuario autenticado.
+     * Solo actualiza los campos enviados — campos null conservan su valor actual.
+     * Si se cambia el exerciseId, elimina automáticamente los sets existentes
+     * ya que pertenecían al ejercicio anterior.
+     *
+     * @param id                id de la sesión
+     * @param sessionExerciseId id del registro en session_exercises a actualizar
+     * @param request           campos a actualizar — exerciseId, orderIndex y/o notes
+     * @return TrainingSessionDetailResponse con la sesión actualizada
+     * @throws NotFoundException si el sessionExerciseId no pertenece a la sesión
+     */
+    public TrainingSessionDetailResponse updateExercise(Long id,
+                                                        Long sessionExerciseId,
+                                                        TrainingSessionExerciseRequest request) {
+        User user = this.authUtils.getAuthenticatedUser();
+        TrainingSessionDetailResponse session = this.trainingSessionRepository.findById(id,
+                                                                                        user.getId());
+
+        Long currentExerciseId = session.exercises()
+                                        .stream()
+                                        .filter(sessionExercise -> sessionExercise.id()
+                                                                                                        .equals(sessionExerciseId))
+                                        .map(exerciseResponse -> exerciseResponse.exercise().id())
+                                        .findFirst()
+                                        .orElseThrow(() -> new NotFoundException("Ejercicio no encontrado para sesión especificada"));
+
+        if (request.exerciseId() != null && !currentExerciseId.equals(request.exerciseId())) {
+            this.trainingSessionRepository.deleteSetsFromSessionExercise(sessionExerciseId);
+        }
+
+        return this.trainingSessionRepository.updateExercise(id,
+                                                             sessionExerciseId,
+                                                             request.exerciseId(),
+                                                             request.orderIndex(),
+                                                             request.notes(),
+                                                             user.getId());
+    }
+
+    /**
+     * Agrega un set vacío a un ejercicio de una sesión del usuario autenticado.
+     * Valida que el sessionExerciseId pertenezca a la sesión antes de insertar.
+     * El set se crea con peso 0 y reps 0 para ser editado con los valores reales.
+     *
+     * @param id                id de la sesión
+     * @param sessionExerciseId id del registro en session_exercises al que agregar el set
+     * @param request           datos del set — solo setNumber obligatorio
+     * @return TrainingSessionDetailResponse con la sesión actualizada
+     * @throws NotFoundException si el sessionExerciseId no pertenece a la sesión
+     */
+    public TrainingSessionDetailResponse saveExerciseSet(Long id,
+                                                         Long sessionExerciseId,
+                                                         TrainingSessionSetRequest request) {
+        User user = this.authUtils.getAuthenticatedUser();
+        TrainingSessionDetailResponse session = this.trainingSessionRepository.findById(id,
+                                                                                        user.getId());
+
+        boolean isExerciseFromSession = session.exercises()
+                                               .stream()
+                                               .anyMatch(sessionExercise -> sessionExercise.id()
+                                                                                                                 .equals(sessionExerciseId));
+
+        if (!isExerciseFromSession)
+            throw new NotFoundException("Ejercicio no encontrado para sesión especificada");
+
+        return this.trainingSessionRepository.saveExerciseSet(id,
+                                                              sessionExerciseId,
+                                                              request.setNumber(),
+                                                              user.getId());
+    }
+
+    /**
+     * Elimina un set de un ejercicio de una sesión del usuario autenticado.
+     * Valida que el sessionExerciseId pertenezca a la sesión antes de eliminar.
+     *
+     * @param id                id de la sesión
+     * @param sessionExerciseId id del registro en session_exercises al que pertenece el set
+     * @param setId             id del set a eliminar
+     * @return TrainingSessionDetailResponse con la sesión actualizada
+     * @throws NotFoundException si el sessionExerciseId no pertenece a la sesión
+     */
+    public TrainingSessionDetailResponse deleteExerciseSetById(Long id,
+                                                               Long sessionExerciseId,
+                                                               Long setId) {
+        User user = this.authUtils.getAuthenticatedUser();
+        TrainingSessionDetailResponse session = this.trainingSessionRepository.findById(id,
+                                                                                        user.getId());
+
+        boolean isExerciseFromSession = session.exercises()
+                                               .stream()
+                                               .anyMatch(sessionExercise -> sessionExercise.id()
+                                                                                                                 .equals(sessionExerciseId));
+
+        if (!isExerciseFromSession)
+            throw new NotFoundException("Ejercicio no encontrado para sesión especificada");
+
+        return this.trainingSessionRepository.deleteExerciseSetById(id,
+                                                                    setId,
+                                                                    sessionExerciseId,
+                                                                    user.getId());
+    }
+
+    /**
+     * Actualiza los datos de un set de un ejercicio de una sesión del usuario autenticado.
+     * Solo actualiza los campos enviados — campos null conservan su valor actual.
+     *
+     * @param id                id de la sesión
+     * @param sessionExerciseId id del registro en session_exercises al que pertenece el set
+     * @param setId             id del set a actualizar
+     * @param request           campos a actualizar — setNumber, weight, reps y/o notes
+     * @return TrainingSessionDetailResponse con la sesión actualizada
+     * @throws NotFoundException si el sessionExerciseId no pertenece a la sesión
+     */
+    public TrainingSessionDetailResponse updateExerciseSet(Long id,
+                                                           Long sessionExerciseId,
+                                                           Long setId,
+                                                           TrainingSessionSetRequest request) {
+        User user = this.authUtils.getAuthenticatedUser();
+        TrainingSessionDetailResponse session = this.trainingSessionRepository.findById(id,
+                                                                                        user.getId());
+
+        session.exercises()
+               .stream()
+               .filter(sessionExercise -> sessionExercise.id()
+                                                                               .equals(sessionExerciseId))
+               .map(exerciseResponse -> exerciseResponse.exercise().id())
+               .findFirst()
+               .orElseThrow(() -> new NotFoundException("Ejercicio no encontrado para sesión especificada"));
+
+        return this.trainingSessionRepository.updateExerciseSet(id,
+                                                                setId,
+                                                                sessionExerciseId,
+                                                                request.setNumber(),
+                                                                request.weight(),
+                                                                request.reps(),
+                                                                request.notes(),
+                                                                user.getId());
     }
 }
