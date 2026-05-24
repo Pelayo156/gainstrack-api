@@ -3,6 +3,7 @@ package com.molina.gainstrack.api.controller;
 import com.molina.gainstrack.api.dto.gym.GymRequest;
 import com.molina.gainstrack.api.dto.gym.GymResponse;
 import com.molina.gainstrack.api.service.GymService;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -32,7 +33,7 @@ public class GymController {
      * @return 201 Created con los datos del gimnasio creado
      */
     @PostMapping
-    public ResponseEntity<GymResponse> save(@RequestBody GymRequest request) {
+    public ResponseEntity<GymResponse> save(@Valid @RequestBody GymRequest request) {
         return ResponseEntity.status(201).body(gymService.save(request));
     }
 

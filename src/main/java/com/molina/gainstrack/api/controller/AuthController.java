@@ -1,8 +1,10 @@
 package com.molina.gainstrack.api.controller;
 
-import com.molina.gainstrack.api.dto.auth.AuthRequest;
 import com.molina.gainstrack.api.dto.auth.AuthResponse;
+import com.molina.gainstrack.api.dto.auth.LoginRequest;
+import com.molina.gainstrack.api.dto.auth.RegisterRequest;
 import com.molina.gainstrack.api.service.AuthService;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -30,7 +32,7 @@ public class AuthController {
      * @return 201 Created con el JWT generado
      */
     @PostMapping("/register")
-    public ResponseEntity<AuthResponse> register(@RequestBody AuthRequest request) {
+    public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
         return ResponseEntity.status(201).body(authService.register(request));
     }
 
@@ -41,7 +43,7 @@ public class AuthController {
      * @return 200 OK con el JWT generado
      */
     @PostMapping("/login")
-    public ResponseEntity<AuthResponse> login(@RequestBody AuthRequest request) {
+    public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
         return ResponseEntity.ok(authService.login(request));
     }
 }

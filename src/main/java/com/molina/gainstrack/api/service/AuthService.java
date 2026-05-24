@@ -1,9 +1,9 @@
 package com.molina.gainstrack.api.service;
 
 import com.molina.gainstrack.api.config.JwtService;
-import com.molina.gainstrack.api.dto.auth.AuthRequest;
 import com.molina.gainstrack.api.dto.auth.AuthResponse;
-import com.molina.gainstrack.api.model.User;
+import com.molina.gainstrack.api.dto.auth.LoginRequest;
+import com.molina.gainstrack.api.dto.auth.RegisterRequest;
 import com.molina.gainstrack.api.repository.RoutineRepository;
 import com.molina.gainstrack.api.repository.UserRepository;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -11,8 +11,6 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.Optional;
 
 /**
  * Servicio que maneja la lógica de negocio de autenticación.
@@ -57,7 +55,7 @@ public class AuthService {
      * @return AuthResponse con el JWT generado
      */
     @Transactional
-    public AuthResponse register(AuthRequest request) {
+    public AuthResponse register(RegisterRequest request) {
         String hashedPassword = passwordEncoder.encode(request.password());
         Long userId = userRepository.save(request.email(), hashedPassword);
 
@@ -78,7 +76,7 @@ public class AuthService {
      * @throws org.springframework.security.core.AuthenticationException
      *         si las credenciales son incorrectas
      */
-    public AuthResponse login(AuthRequest request) {
+    public AuthResponse login(LoginRequest request) {
         authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(request.email(),
                                                                                    request.password()));
 

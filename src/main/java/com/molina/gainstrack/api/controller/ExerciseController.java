@@ -3,6 +3,7 @@ package com.molina.gainstrack.api.controller;
 import com.molina.gainstrack.api.dto.exercise.ExerciseRequest;
 import com.molina.gainstrack.api.dto.exercise.ExerciseResponse;
 import com.molina.gainstrack.api.service.ExerciseService;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -44,7 +45,7 @@ public class ExerciseController {
      * @return 201 Created con los datos del ejercicio creado.
      */
     @PostMapping
-    public ResponseEntity<ExerciseResponse> save(@RequestBody ExerciseRequest request) {
+    public ResponseEntity<ExerciseResponse> save(@Valid @RequestBody ExerciseRequest request) {
         return ResponseEntity.status(201).body(exerciseService.save(request));
     }
 

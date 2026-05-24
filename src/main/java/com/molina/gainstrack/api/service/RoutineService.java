@@ -1,11 +1,13 @@
 package com.molina.gainstrack.api.service;
 
 import com.molina.gainstrack.api.dto.routine.*;
+import com.molina.gainstrack.api.dto.session.TrainingSessionSummaryResponse;
 import com.molina.gainstrack.api.exception.ForbiddenException;
 import com.molina.gainstrack.api.exception.NotFoundException;
 import com.molina.gainstrack.api.model.User;
 import com.molina.gainstrack.api.repository.ExerciseRepository;
 import com.molina.gainstrack.api.repository.RoutineRepository;
+import com.molina.gainstrack.api.repository.TrainingSessionRepository;
 import com.molina.gainstrack.api.utils.AuthUtils;
 import org.springframework.stereotype.Service;
 
@@ -21,6 +23,7 @@ public class RoutineService {
 
     private final RoutineRepository routineRepository;
     private final ExerciseRepository exerciseRepository;
+    private final TrainingSessionRepository trainingSessionRepository;
     private final AuthUtils authUtils;
 
     /**
@@ -29,9 +32,11 @@ public class RoutineService {
      */
     public RoutineService(RoutineRepository routineRepository,
                           ExerciseRepository exerciseRepository,
+                          TrainingSessionRepository trainingSessionRepository,
                           AuthUtils authUtils) {
         this.routineRepository = routineRepository;
         this.exerciseRepository = exerciseRepository;
+        this.trainingSessionRepository = trainingSessionRepository;
         this.authUtils = authUtils;
     }
 
@@ -295,5 +300,22 @@ public class RoutineService {
                                                         request.reps(),
                                                         request.notes(),
                                                         user.getId());
+    }
+
+    /**
+     * Retorna todas las sesiones asociadas a una rutina del usuario autenticado.
+     * Valida que la rutina exista y pertenezca al usuario antes de consultar.
+     * Las sesiones se retornan ordenadas de más reciente a más antigua.
+     *
+     * @param id id de la rutina cuyas sesiones se consultan
+     * @return lista de sesiones con sus datos de cabecera y gimnasio
+     * @throws NotFoundException si la rutina no existe o no pertenece al usuario
+     */
+    public List<TrainingSessionSummaryResponse> findSessionsByRoutineId(Long id) {
+        User user = this.authUtils.getAuthenticatedUser();
+
+        // Se comprueba que la rutina exista
+        this.routineRepository.findById(id, user.getId());
+        return this.trainingSessionRepository.findAllByRoutineId(id, user.getId());
     }
 }

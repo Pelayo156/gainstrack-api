@@ -1,6 +1,7 @@
 package com.molina.gainstrack.api.controller;
 
 import com.molina.gainstrack.api.dto.routine.*;
+import com.molina.gainstrack.api.dto.session.TrainingSessionSummaryResponse;
 import com.molina.gainstrack.api.service.RoutineService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -189,5 +190,18 @@ public class RoutineController {
                                                                               routineExerciseId,
                                                                               setId,
                                                                               request));
+    }
+
+    /**
+     * Retorna todas las sesiones de una rutina del usuario autenticado.
+     * Las sesiones se ordenan de más reciente a más antigua.
+     * Usar GET /sessions/{id} para el detalle completo de una sesión específica.
+     *
+     * @param id id de la rutina cuyas sesiones se consultan
+     * @return 200 OK con la lista de sesiones de la rutina
+     */
+    @GetMapping("/{id}/sessions")
+    public ResponseEntity<List<TrainingSessionSummaryResponse>> findSessionsByRoutineId(@PathVariable("id") Long id) {
+        return ResponseEntity.ok().body(this.routineService.findSessionsByRoutineId(id));
     }
 }

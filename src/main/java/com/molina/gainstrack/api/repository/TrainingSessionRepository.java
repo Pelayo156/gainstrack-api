@@ -68,6 +68,45 @@ public class TrainingSessionRepository {
     }
 
     /**
+     * Retorna el resumen de todas las sesiones asociadas a una rutina del usuario.
+     * Incluye los datos del gimnasio mediante LEFT JOIN.
+     * Ordenadas de más reciente a más antigua.
+     *
+     * @param routineId id de la rutina cuyas sesiones se consultan
+     * @param userId    id del usuario propietario — previene acceso a sesiones ajenas
+     * @return lista de sesiones ordenadas por fecha descendente
+     */
+    public List<TrainingSessionSummaryResponse> findAllByRoutineId(Long routineId,
+                                                                   Long userId) {
+        return jdbcClient.sql("SELECT ts.id AS training_session_id, " +
+                              "g.id AS gym_id, " +
+                              "g.name AS gym_name, " +
+                              "ts.session_date AS training_session_date, " +
+                              "ts.notes AS training_session_notes " +
+                              "FROM training_sessions ts " +
+                              "LEFT JOIN gyms g ON ts.gym_id = g.id " +
+                              "WHERE ts.routine_id = :routineId AND ts.user_id = :userId " +
+                              "ORDER BY ts.session_date DESC")
+                .param("routineId", routineId)
+                .param("userId", userId)
+                .query((rs, rowNum) -> {
+                    Long gymId = rs.getObject("gym_id", Long.class);
+                    GymResponse gym = gymId != null
+                            ? new GymResponse(gymId, rs.getString("gym_name"))
+                            : new GymResponse(null, "No especificado");
+
+                    return new TrainingSessionSummaryResponse(
+                            rs.getLong("training_session_id"),
+                            gym,
+                            rs.getDate("training_session_date")
+                                    .toLocalDate(),
+                            rs.getString("training_session_notes")
+                    );
+                })
+                .list();
+    }
+
+    /**
      * Crea una nueva sesión de entrenamiento ejecutando una rutina existente.
      * Copia automáticamente todos los ejercicios y sets de la rutina
      * como punto de partida para el usuario durante la sesión.
@@ -179,10 +218,11 @@ public class TrainingSessionRepository {
                                                   "mg.name AS muscle_group_name, " +
                                                   "e.user_id AS exercise_user_id, " +
                                                   "e.is_predefined AS exercise_is_predefined " +
-                                                  "FROM session_exercises se " +
-                                                  "JOIN exercises e ON se.exercise_id = e.id " +
-                                                  "JOIN muscle_groups mg ON e.muscle_group_id = mg.id " +
-                                                  "WHERE se.session_id = :sessionId")
+                                           "FROM session_exercises se " +
+                                           "JOIN exercises e ON se.exercise_id = e.id " +
+                                           "JOIN muscle_groups mg ON e.muscle_group_id = mg.id " +
+                                           "WHERE se.session_id = :sessionId " +
+                                           "ORDER BY se.order_index ASC")
                                     .param("sessionId", id)
                                     .query((rs2, rowNum2) -> {
                                         // Query 3: sets de cada ejercicio

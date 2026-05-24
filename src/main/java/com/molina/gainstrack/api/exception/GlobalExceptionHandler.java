@@ -7,12 +7,18 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Manejador global de excepciones para toda la aplicación.
@@ -37,6 +43,7 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(status).body(new ErrorResponse(status.value(),
                                                                     status.name(),
                                                                     "Usuario y/o contraseña incorrectos",
+                                                                    null,
                                                                     LocalDateTime.now()));
     }
 
@@ -52,6 +59,42 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(status).body(new ErrorResponse(status.value(),
                                                                     status.name(),
                                                                     "No autorizado",
+                                                                    null,
+                                                                    LocalDateTime.now()));
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handlerHttpMessageNotReadableException(HttpMessageNotReadableException ex) {
+        HttpStatus status = HttpStatus.BAD_REQUEST;
+        return ResponseEntity.status(status).body(new ErrorResponse(status.value(),
+                                                                    status.name(),
+                                                                    "Formato de datos inválido — verifique los tipos de los campos enviados",
+                                                                    null,
+                                                                    LocalDateTime.now()
+        ));
+    }
+
+    /**
+     * Maneja errores de validación de campos en el body del request.
+     * Extrae todos los errores por campo y los retorna en un mapa
+     * para que el frontend pueda mostrarlos junto al campo correspondiente.
+     *
+     * @param ex excepción con el detalle de los campos que fallaron la validación
+     * @return 400 Bad Request con mapa de errores por campo
+     */
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ErrorResponse> handlerMethodArgumentNotValidException(MethodArgumentNotValidException ex) {
+        List<FieldError> fieldErrors = ex.getBindingResult().getFieldErrors();
+        Map<String, String> errors = new HashMap<>();
+
+        fieldErrors.forEach(error -> errors.put(error.getField(),
+                                                         error.getDefaultMessage()));
+
+        HttpStatus status = HttpStatus.BAD_REQUEST;
+        return ResponseEntity.status(status).body(new ErrorResponse(status.value(),
+                                                                    status.name(),
+                                                                    "Error de validación",
+                                                                    errors,
                                                                     LocalDateTime.now()));
     }
 
@@ -69,7 +112,7 @@ public class GlobalExceptionHandler {
         String message = "Error de integridad de datos — verifique la información enviada";
 
         if (dataIntegrityViolationException.getMessage().contains("users.uq_users_email")) {
-            message = "Email ya ha sido registrado";
+            message = "Email ya se encuentra registrado";
         } else if (dataIntegrityViolationException.getMessage().contains("routine_exercises.fk_re_routine")) {
             message = "Rutina no encontrada - verifique la información enviada";
         } else if (dataIntegrityViolationException.getMessage().contains("routine_exercises.fk_re_exercise")) {
@@ -85,6 +128,7 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(status).body(new ErrorResponse(status.value(),
                                                                     status.name(),
                                                                     message,
+                                                                    null,
                                                                     LocalDateTime.now()));
     }
 
@@ -102,6 +146,7 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(status).body(new ErrorResponse(status.value(),
                                                                     status.name(),
                                                                     "Error de base de datos - intente nuevamente",
+                                                                    null,
                                                                     LocalDateTime.now()));
     }
 
@@ -117,6 +162,7 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(status).body(new ErrorResponse(status.value(),
                                                                     status.name(),
                                                                     notFoundException.getMessage(),
+                                                                    null,
                                                                     LocalDateTime.now()));
     }
 
@@ -132,6 +178,7 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(status).body(new ErrorResponse(status.value(),
                                                                     status.name(),
                                                                     forbiddenException.getMessage(),
+                                                                    null,
                                                                     LocalDateTime.now()));
     }
 
@@ -150,6 +197,7 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(status).body(new ErrorResponse(status.value(),
                                                                     status.name(),
                                                                     "Error inesperado - contacte al administrador",
+                                                                    null,
                                                                     LocalDateTime.now()));
     }
 }
