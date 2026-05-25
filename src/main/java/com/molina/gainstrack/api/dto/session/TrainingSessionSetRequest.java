@@ -1,5 +1,8 @@
 package com.molina.gainstrack.api.dto.session;
 
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
+
 /**
  * DTO de entrada para crear o actualizar un set de un ejercicio en una sesión.
  * En creación solo setNumber es obligatorio — peso y reps inician en 0.
@@ -11,7 +14,11 @@ package com.molina.gainstrack.api.dto.session;
  * @param reps      repeticiones — opcional, puede ser null
  * @param notes     notas opcionales del set — puede ser null
  */
-public record TrainingSessionSetRequest(Integer setNumber,
-                                        Double weight,
-                                        Integer reps,
-                                        String notes) {}
+public record TrainingSessionSetRequest(
+        @NotNull(message = "{field.required}")
+        @Positive(message = "{field.positive}")
+        Integer setNumber,
+        Double weight,
+        Integer reps,
+        String notes
+) {}

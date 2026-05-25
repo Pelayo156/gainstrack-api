@@ -1,0 +1,13 @@
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  jdbc:
+    template:
+      query-timeout: 30
+
+logging:
+  level:
+    root: WARN
+    com.molina.gainstrack: INFO

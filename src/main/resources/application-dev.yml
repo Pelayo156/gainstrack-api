@@ -1,6 +1,6 @@
 spring:
   datasource:
-    url: jdbc:mysql://localhost:3306/gainstrack
+    url: jdbc:mysql://localhost:3306/gainstrack_dev
     username: admin
     password: admin
   jdbc:

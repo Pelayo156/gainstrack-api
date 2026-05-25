@@ -9,6 +9,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Objects;
@@ -48,7 +49,8 @@ public class TrainingSessionRepository {
                                       "ts.notes AS training_session_notes " +
                               "FROM training_sessions ts " +
                               "LEFT JOIN gyms g ON ts.gym_id = g.id " +
-                              "WHERE ts.user_id = :userId")
+                              "WHERE ts.user_id = :userId " +
+                              "ORDER BY ts.session_date DESC")
                 .param("userId", userId)
                 .query((rs, rowNum) -> {
                     Long gymId = rs.getObject("gym_id", Long.class);
@@ -120,6 +122,7 @@ public class TrainingSessionRepository {
      * @return TrainingSessionDetailResponse con la sesión completa incluyendo
      *         ejercicios y sets copiados desde la rutina
      */
+    @Transactional
     public TrainingSessionDetailResponse save(Long userId, Long gymId, Long routineId, String notes) {
 
         KeyHolder keyHolder = new GeneratedKeyHolder();

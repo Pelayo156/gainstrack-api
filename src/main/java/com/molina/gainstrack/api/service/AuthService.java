@@ -6,6 +6,8 @@ import com.molina.gainstrack.api.dto.auth.LoginRequest;
 import com.molina.gainstrack.api.dto.auth.RegisterRequest;
 import com.molina.gainstrack.api.repository.RoutineRepository;
 import com.molina.gainstrack.api.repository.UserRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -20,6 +22,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class AuthService {
 
+    private static final Logger LOG = LoggerFactory.getLogger(AuthService.class);
+
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
@@ -31,6 +35,7 @@ public class AuthService {
      * @param passwordEncoder       encoder BCrypt para hashear contraseñas
      * @param jwtService            servicio para generar tokens JWT
      * @param authenticationManager gestor de autenticación de Spring Security
+     * @param routineRepository     repositorio de rutinas para crear rutina libre
      */
     public AuthService(UserRepository userRepository,
                        PasswordEncoder passwordEncoder,
@@ -58,12 +63,9 @@ public class AuthService {
     public AuthResponse register(RegisterRequest request) {
         String hashedPassword = passwordEncoder.encode(request.password());
         Long userId = userRepository.save(request.email(), hashedPassword);
-
-        // Se crea rutina libre
         this.routineRepository.saveFree(userId);
-
-        // Se genera token para futuras request
         String token = jwtService.generateToken(request.email());
+        LOG.info("Nuevo usuario registrado — userId: {}", userId);
         return new AuthResponse(token);
     }
 
@@ -78,9 +80,10 @@ public class AuthService {
      */
     public AuthResponse login(LoginRequest request) {
         authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(request.email(),
-                                                                                   request.password()));
-
+                                                                                   request.password()
+        ));
         String token = jwtService.generateToken(request.email());
+        LOG.info("Login exitoso — userId obtenido por email");
         return new AuthResponse(token);
     }
 }

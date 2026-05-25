@@ -6,7 +6,10 @@ import com.molina.gainstrack.api.model.User;
 import com.molina.gainstrack.api.repository.ExerciseRepository;
 import com.molina.gainstrack.api.repository.TrainingSessionRepository;
 import com.molina.gainstrack.api.utils.AuthUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -17,6 +20,8 @@ import java.util.List;
  */
 @Service
 public class TrainingSessionService {
+
+    private static final Logger LOG = LoggerFactory.getLogger(TrainingSessionService.class);
 
     private final TrainingSessionRepository trainingSessionRepository;
     private final ExerciseRepository exerciseRepository;
@@ -54,12 +59,16 @@ public class TrainingSessionService {
      * @param request datos de la sesión — routineId obligatorio, gymId y notes opcionales
      * @return TrainingSessionDetailResponse con el detalle completo de la sesión creada
      */
+    @Transactional
     public TrainingSessionDetailResponse save(TrainingSessionRequest request) {
         User user = this.authUtils.getAuthenticatedUser();
-        return this.trainingSessionRepository.save(user.getId(),
-                                                   request.gymId(),
-                                                   request.routineId(),
-                                                   request.notes());
+        TrainingSessionDetailResponse session = this.trainingSessionRepository.save(user.getId(),
+                                                                                    request.gymId(),
+                                                                                    request.routineId(),
+                                                                                    request.notes());
+        LOG.info("Nueva sesión creada — sessionId: {}, userId: {}, routineId: {}",
+                session.id(), user.getId(), request.routineId());
+        return session;
     }
 
     /**
@@ -84,6 +93,7 @@ public class TrainingSessionService {
     public void deleteById(Long id) {
         User user = this.authUtils.getAuthenticatedUser();
         trainingSessionRepository.deleteById(id, user.getId());
+        LOG.warn("Sesión eliminada — sessionId: {}, userId: {}", id, user.getId());
     }
 
     /**
@@ -94,12 +104,9 @@ public class TrainingSessionService {
      * @param request datos a actualizar — solo notes
      * @throws NotFoundException si la sesión no existe
      */
-    public void update(Long id,
-                       TrainingSessionNotesRequest request) {
+    public void update(Long id, TrainingSessionNotesRequest request) {
         User user = this.authUtils.getAuthenticatedUser();
-        this.trainingSessionRepository.update(id,
-                                              user.getId(),
-                                              request.notes());
+        this.trainingSessionRepository.update(id, user.getId(), request.notes());
     }
 
     /**
@@ -111,6 +118,7 @@ public class TrainingSessionService {
      * @return TrainingSessionDetailResponse con la sesión actualizada
      * @throws NotFoundException si el ejercicio no existe en el catálogo
      */
+    @Transactional
     public TrainingSessionDetailResponse saveExercise(Long id,
                                                       TrainingSessionExerciseRequest request) {
         User user = this.authUtils.getAuthenticatedUser();
@@ -118,10 +126,13 @@ public class TrainingSessionService {
         if (!exerciseRepository.existsById(request.exerciseId()))
             throw new NotFoundException("Ejercicio no encontrado");
 
-        return this.trainingSessionRepository.saveExercise(id,
-                                                           request.exerciseId(),
-                                                           request.orderIndex(),
-                                                           user.getId());
+        TrainingSessionDetailResponse session = this.trainingSessionRepository.saveExercise(id,
+                                                                                            request.exerciseId(),
+                                                                                            request.orderIndex(),
+                                                                                            user.getId());
+        LOG.info("Ejercicio agregado a sesión — sessionId: {}, exerciseId: {}",
+                 id, request.exerciseId());
+        return session;
     }
 
     /**
@@ -134,22 +145,26 @@ public class TrainingSessionService {
      * @return TrainingSessionDetailResponse con la sesión actualizada
      * @throws NotFoundException si el sessionExerciseId no pertenece a la sesión
      */
+    @Transactional
     public TrainingSessionDetailResponse deleteExerciseById(Long id,
                                                             Long sessionExerciseId) {
         User user = this.authUtils.getAuthenticatedUser();
         TrainingSessionDetailResponse session = this.trainingSessionRepository.findById(id,
                                                                                         user.getId());
+
         boolean isExerciseFromSession = session.exercises()
                                                .stream()
-                                               .anyMatch(sessionExercise -> sessionExercise.id()
-                                                                                                                 .equals(sessionExerciseId));
+                                               .anyMatch(se -> se.id().equals(sessionExerciseId));
 
         if (!isExerciseFromSession)
             throw new NotFoundException("Ejercicio no encontrado para sesión especificada");
 
-        return this.trainingSessionRepository.deleteExerciseById(id,
-                                                                 sessionExerciseId,
-                                                                 user.getId());
+        TrainingSessionDetailResponse updated = this.trainingSessionRepository.deleteExerciseById(id,
+                                                                                                  sessionExerciseId,
+                                                                                                  user.getId());
+        LOG.warn("Ejercicio eliminado de sesión — sessionId: {}, sessionExerciseId: {}",
+                 id, sessionExerciseId);
+        return updated;
     }
 
     /**
@@ -164,6 +179,7 @@ public class TrainingSessionService {
      * @return TrainingSessionDetailResponse con la sesión actualizada
      * @throws NotFoundException si el sessionExerciseId no pertenece a la sesión
      */
+    @Transactional
     public TrainingSessionDetailResponse updateExercise(Long id,
                                                         Long sessionExerciseId,
                                                         TrainingSessionExerciseRequest request) {
@@ -173,14 +189,15 @@ public class TrainingSessionService {
 
         Long currentExerciseId = session.exercises()
                                         .stream()
-                                        .filter(sessionExercise -> sessionExercise.id()
-                                                                                                        .equals(sessionExerciseId))
-                                        .map(exerciseResponse -> exerciseResponse.exercise().id())
+                                        .filter(se -> se.id().equals(sessionExerciseId))
+                                        .map(se -> se.exercise().id())
                                         .findFirst()
                                         .orElseThrow(() -> new NotFoundException("Ejercicio no encontrado para sesión especificada"));
 
         if (request.exerciseId() != null && !currentExerciseId.equals(request.exerciseId())) {
             this.trainingSessionRepository.deleteSetsFromSessionExercise(sessionExerciseId);
+            LOG.warn("Sets eliminados por cambio de ejercicio — sessionExerciseId: {}",
+                     sessionExerciseId);
         }
 
         return this.trainingSessionRepository.updateExercise(id,
@@ -202,6 +219,7 @@ public class TrainingSessionService {
      * @return TrainingSessionDetailResponse con la sesión actualizada
      * @throws NotFoundException si el sessionExerciseId no pertenece a la sesión
      */
+    @Transactional
     public TrainingSessionDetailResponse saveExerciseSet(Long id,
                                                          Long sessionExerciseId,
                                                          TrainingSessionSetRequest request) {
@@ -211,16 +229,20 @@ public class TrainingSessionService {
 
         boolean isExerciseFromSession = session.exercises()
                                                .stream()
-                                               .anyMatch(sessionExercise -> sessionExercise.id()
-                                                                                                                 .equals(sessionExerciseId));
+                                               .anyMatch(se -> se.id().equals(sessionExerciseId));
 
         if (!isExerciseFromSession)
             throw new NotFoundException("Ejercicio no encontrado para sesión especificada");
 
-        return this.trainingSessionRepository.saveExerciseSet(id,
-                                                              sessionExerciseId,
-                                                              request.setNumber(),
-                                                              user.getId());
+        TrainingSessionDetailResponse updated = this.trainingSessionRepository.saveExerciseSet(id,
+                                                                                               sessionExerciseId,
+                                                                                               request.setNumber(),
+                                                                                               user.getId());
+        LOG.info("Set agregado — sessionId: {}, sessionExerciseId: {}, setNumber: {}",
+                 id,
+                 sessionExerciseId,
+                 request.setNumber());
+        return updated;
     }
 
     /**
@@ -233,6 +255,7 @@ public class TrainingSessionService {
      * @return TrainingSessionDetailResponse con la sesión actualizada
      * @throws NotFoundException si el sessionExerciseId no pertenece a la sesión
      */
+    @Transactional
     public TrainingSessionDetailResponse deleteExerciseSetById(Long id,
                                                                Long sessionExerciseId,
                                                                Long setId) {
@@ -242,16 +265,20 @@ public class TrainingSessionService {
 
         boolean isExerciseFromSession = session.exercises()
                                                .stream()
-                                               .anyMatch(sessionExercise -> sessionExercise.id()
-                                                                                                                 .equals(sessionExerciseId));
+                                               .anyMatch(se -> se.id().equals(sessionExerciseId));
 
         if (!isExerciseFromSession)
             throw new NotFoundException("Ejercicio no encontrado para sesión especificada");
 
-        return this.trainingSessionRepository.deleteExerciseSetById(id,
-                                                                    setId,
-                                                                    sessionExerciseId,
-                                                                    user.getId());
+        TrainingSessionDetailResponse updated = this.trainingSessionRepository.deleteExerciseSetById(id,
+                                                                                                     setId,
+                                                                                                     sessionExerciseId,
+                                                                                                     user.getId());
+        LOG.warn("Set eliminado — sessionId: {}, sessionExerciseId: {}, setId: {}",
+                 id,
+                 sessionExerciseId,
+                 setId);
+        return updated;
     }
 
     /**
@@ -274,12 +301,11 @@ public class TrainingSessionService {
                                                                                         user.getId());
 
         session.exercises()
-               .stream()
-               .filter(sessionExercise -> sessionExercise.id()
-                                                                               .equals(sessionExerciseId))
-               .map(exerciseResponse -> exerciseResponse.exercise().id())
-               .findFirst()
-               .orElseThrow(() -> new NotFoundException("Ejercicio no encontrado para sesión especificada"));
+                .stream()
+                .filter(se -> se.id().equals(sessionExerciseId))
+                .map(se -> se.exercise().id())
+                .findFirst()
+                .orElseThrow(() -> new NotFoundException("Ejercicio no encontrado para sesión especificada"));
 
         return this.trainingSessionRepository.updateExerciseSet(id,
                                                                 setId,

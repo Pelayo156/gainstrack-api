@@ -2,6 +2,7 @@ package com.molina.gainstrack.api.controller;
 
 import com.molina.gainstrack.api.dto.session.*;
 import com.molina.gainstrack.api.service.TrainingSessionService;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -44,7 +45,7 @@ public class TrainingSessionController {
      * @return 201 Created con el detalle completo de la sesión creada
      */
    @PostMapping
-    public ResponseEntity<TrainingSessionDetailResponse> save(@RequestBody TrainingSessionRequest request) {
+    public ResponseEntity<TrainingSessionDetailResponse> save(@Valid @RequestBody TrainingSessionRequest request) {
        return ResponseEntity.status(201).body(this.trainingSessionService.save(request));
    }
 
@@ -57,7 +58,7 @@ public class TrainingSessionController {
      */
    @GetMapping("/{id}")
    public ResponseEntity<TrainingSessionDetailResponse> findById(@PathVariable("id") Long id) {
-       return ResponseEntity.ok().body(this.trainingSessionService.findById(id));
+       return ResponseEntity.ok(this.trainingSessionService.findById(id));
    }
 
     /**
@@ -96,7 +97,7 @@ public class TrainingSessionController {
      */
     @PostMapping("/{id}/exercises")
     public ResponseEntity<TrainingSessionDetailResponse> saveExercise(@PathVariable("id") Long id,
-                                                                      @RequestBody TrainingSessionExerciseRequest request) {
+                                                                      @Valid @RequestBody TrainingSessionExerciseRequest request) {
         return ResponseEntity.status(201).body(this.trainingSessionService.saveExercise(id,
                                                                                         request));
     }
@@ -112,8 +113,8 @@ public class TrainingSessionController {
     @DeleteMapping("/{id}/exercises/{sessionExerciseId}")
     public ResponseEntity<TrainingSessionDetailResponse> deleteExerciseById(@PathVariable("id") Long id,
                                                                             @PathVariable("sessionExerciseId") Long sessionExerciseId) {
-        return ResponseEntity.ok().body(this.trainingSessionService.deleteExerciseById(id,
-                                                                                       sessionExerciseId));
+        return ResponseEntity.ok(this.trainingSessionService.deleteExerciseById(id,
+                                                                                sessionExerciseId));
     }
 
     /**
@@ -129,9 +130,9 @@ public class TrainingSessionController {
     public ResponseEntity<TrainingSessionDetailResponse> updateExercise(@PathVariable("id") Long id,
                                                                         @PathVariable("sessionExerciseId") Long sessionExerciseId,
                                                                         @RequestBody TrainingSessionExerciseRequest request) {
-        return ResponseEntity.ok().body(this.trainingSessionService.updateExercise(id,
-                                                                                   sessionExerciseId,
-                                                                                   request));
+        return ResponseEntity.ok(this.trainingSessionService.updateExercise(id,
+                                                                            sessionExerciseId,
+                                                                            request));
     }
 
     /**
@@ -145,8 +146,8 @@ public class TrainingSessionController {
      */
     @PostMapping("/{id}/exercises/{sessionExerciseId}/sets")
     public ResponseEntity<TrainingSessionDetailResponse> saveExerciseSet(@PathVariable("id") Long id,
-                                                                 @PathVariable("sessionExerciseId") Long sessionExerciseId,
-                                                                 @RequestBody TrainingSessionSetRequest request) {
+                                                                         @PathVariable("sessionExerciseId") Long sessionExerciseId,
+                                                                         @Valid @RequestBody TrainingSessionSetRequest request) {
         return ResponseEntity.status(201).body(this.trainingSessionService.saveExerciseSet(id,
                                                                                            sessionExerciseId,
                                                                                            request));
@@ -164,9 +165,9 @@ public class TrainingSessionController {
     public ResponseEntity<TrainingSessionDetailResponse> deleteExerciseSetById(@PathVariable("id") Long id,
                                                                        @PathVariable("sessionExerciseId") Long sessionExerciseId,
                                                                        @PathVariable("setId") Long setId) {
-        return ResponseEntity.ok().body(this.trainingSessionService.deleteExerciseSetById(id,
-                                                                                          sessionExerciseId,
-                                                                                          setId));
+        return ResponseEntity.ok(this.trainingSessionService.deleteExerciseSetById(id,
+                                                                                   sessionExerciseId,
+                                                                                   setId));
     }
 
     /**
@@ -184,9 +185,9 @@ public class TrainingSessionController {
                                                                            @PathVariable("sessionExerciseId") Long sessionExerciseId,
                                                                            @PathVariable("setId") Long setId,
                                                                            @RequestBody TrainingSessionSetRequest request) {
-        return ResponseEntity.ok().body(this.trainingSessionService.updateExerciseSet(id,
-                                                                                      sessionExerciseId,
-                                                                                      setId,
-                                                                                      request));
+        return ResponseEntity.ok(this.trainingSessionService.updateExerciseSet(id,
+                                                                               sessionExerciseId,
+                                                                               setId,
+                                                                               request));
     }
 }

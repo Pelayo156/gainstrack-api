@@ -1,0 +1,13 @@
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  jdbc:
+    template:
+      query-timeout: 10
+
+logging:
+  level:
+    root: INFO
+    org.springframework.security: DEBUG

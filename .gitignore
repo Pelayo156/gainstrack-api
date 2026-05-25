@@ -31,3 +31,7 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Gainstrack ###
+.env
+start.sh
