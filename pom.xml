@@ -11,8 +11,8 @@
 	<groupId>com.molina</groupId>
 	<artifactId>api</artifactId>
 	<version>0.0.1</version>
-	<name/>
-	<description/>
+	<name>gainstrack-api</name>
+	<description>Backend de GainsTrack — API REST para registro de entrenamiento</description>
 	<url/>
 	<licenses>
 		<license/>
