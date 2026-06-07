@@ -22,18 +22,24 @@ CREATE TABLE muscle_groups (
 -- 2. users
 -- Usuarios registrados en el sistema.
 -- Sin FK propias. Otras tablas dependen de esta.
--- Al registrarse, se crea automáticamente una rutina libre
+-- Al registrarse se crea automáticamente una rutina libre
 -- asociada al usuario desde AuthService.
+-- Soporta dos métodos de autenticación:
+--   - Email/contraseña: password_hash con valor, google_id NULL
+--   - Google OAuth:     google_id con valor, password_hash NULL
+--   - Ambos vinculados: password_hash y google_id con valor
 -- ------------------------------------------------------------
 CREATE TABLE users (
     id            BIGINT       NOT NULL AUTO_INCREMENT,
+    name          VARCHAR(150) NOT NULL,
     email         VARCHAR(255) NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
+    password_hash VARCHAR(255) NULL,     -- NULL para usuarios de Google
+    google_id     VARCHAR(255) NULL,     -- NULL para usuarios de email/contraseña
     created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT pk_users       PRIMARY KEY (id),
-    CONSTRAINT uq_users_email UNIQUE (email)
+    CONSTRAINT pk_users           PRIMARY KEY (id),
+    CONSTRAINT uq_users_email     UNIQUE (email),
+    CONSTRAINT uq_users_google_id UNIQUE (google_id)
 );
-
 
 -- ------------------------------------------------------------
 -- 3. gyms

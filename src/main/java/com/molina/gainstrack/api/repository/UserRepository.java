@@ -26,9 +26,16 @@ public class UserRepository {
     }
 
     public Optional<User> findByEmail(String email) {
-        return jdbcClient.sql("SELECT id, email, password_hash FROM users WHERE email = :email")
+        return jdbcClient.sql("SELECT id, name, email, password_hash, google_id FROM users WHERE email = :email")
                          .param("email", email)
-                         .query(User.class)
+                         .query((rs, rowNum) -> new User(
+                                 rs.getLong("id"),
+                                 rs.getString("name"),
+                                 rs.getString("email"),
+                                 rs.getString("password_hash"),
+                                 rs.getString("google_id")
+                         ))
+
                          .optional();
     }
 
@@ -40,9 +47,10 @@ public class UserRepository {
      * @param passwordHash contraseña ya hasheada con BCrypt
      * @return id generado para el usuario recién creado
      */
-    public Long save(String email, String passwordHash) {
+    public Long save(String name, String email, String passwordHash) {
         KeyHolder keyHolder = new GeneratedKeyHolder();
-        jdbcClient.sql("INSERT INTO users (email, password_hash) VALUES (:email, :passwordHash)")
+        jdbcClient.sql("INSERT INTO users (name, email, password_hash) VALUES (:name, :email, :passwordHash)")
+                  .param("name", name)
                   .param("email", email)
                   .param("passwordHash", passwordHash)
                   .update(keyHolder);
