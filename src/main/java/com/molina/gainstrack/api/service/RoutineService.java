@@ -139,20 +139,20 @@ public class RoutineService {
      * @throws NotFoundException si el ejercicio no existe en el catálogo
      */
     @Transactional
-    public RoutineDetailResponse saveExercise(Long id, RoutineExerciseRequest request) {
+    public RoutineExerciseResponse saveExercise(Long id, RoutineExerciseRequest request) {
         User user = this.authUtils.getAuthenticatedUser();
 
         if (!exerciseRepository.existsById(request.exerciseId()))
             throw new NotFoundException("Ejercicio no encontrado");
 
-        RoutineDetailResponse routine = this.routineRepository.saveExercise(id,
-                                                                            request.exerciseId(),
-                                                                            request.orderIndex(),
-                                                                            user.getId());
+        RoutineExerciseResponse routineExercise = this.routineRepository.saveExercise(id,
+                                                                              request.exerciseId(),
+                                                                              request.orderIndex(),
+                                                                              user.getId());
         LOG.info("Ejercicio agregado a rutina — routineId: {}, exerciseId: {}",
                  id,
                  request.exerciseId());
-        return routine;
+        return routineExercise;
     }
 
     /**

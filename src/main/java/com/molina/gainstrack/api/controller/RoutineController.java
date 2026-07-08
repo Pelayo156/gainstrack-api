@@ -97,8 +97,8 @@ public class RoutineController {
      * @return 201 Created con la rutina actualizada
      */
     @PostMapping("/{id}/exercises")
-    public ResponseEntity<RoutineDetailResponse> saveExercise(@PathVariable("id") Long id,
-                                                              @Valid @RequestBody RoutineExerciseRequest request) {
+    public ResponseEntity<RoutineExerciseResponse> saveExercise(@PathVariable("id") Long id,
+                                                                @Valid @RequestBody RoutineExerciseRequest request) {
         return ResponseEntity.status(201).body(this.routineService.saveExercise(id,
                                                                                 request));
     }

@@ -223,18 +223,26 @@ public class RoutineRepository {
      * @param userId     id del usuario propietario
      * @return RoutineDetailResponse con la rutina actualizada
      */
-    public RoutineDetailResponse saveExercise(Long id,
+    public RoutineExerciseResponse saveExercise(Long id,
                                               Long exerciseId,
                                               Integer orderIndex,
                                               Long userId) {
+        KeyHolder keyHolder = new GeneratedKeyHolder();
         this.jdbcClient.sql("INSERT INTO routine_exercises (routine_id, exercise_id, order_index, notes) " +
                             "VALUES (:id, :exerciseId, :orderIndex, NULL)")
                        .param("id", id)
                        .param("exerciseId", exerciseId)
                        .param("orderIndex", orderIndex)
-                       .update();
+                       .update(keyHolder);
+        Long exerciseRoutineId = Objects.requireNonNull(keyHolder.getKey()).longValue();
+        RoutineDetailResponse routineDetailResponse = this.findById(id, userId);
 
-        return this.findById(id, userId);
+
+        return routineDetailResponse.exercises()
+                                    .stream()
+                                    .filter(re -> re.id().equals(exerciseRoutineId))
+                                    .findFirst()
+                                    .orElseThrow(() -> new NotFoundException("Ejercicio no encontrado"));
     }
 
     /**
