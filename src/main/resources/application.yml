@@ -8,7 +8,7 @@ spring:
       enabled: true
 
 server:
-  port: ${SERVER_PORT:8080}
+  port: ${SERVER_PORT:8080} # Se le envía como variable de entorno al momento de levantar el contenedor
 
 jwt:
   secret: ${JWT_SECRET}
