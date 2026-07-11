@@ -289,11 +289,17 @@ public class RoutineRepository {
     public RoutineDetailResponse saveExerciseSet(Long id,
                                                  Long routineExerciseId,
                                                  Integer setNumber,
+                                                 Double setWeight,
+                                                 Integer setReps,
+                                                 String setNotes,
                                                  Long userId) {
         this.jdbcClient.sql("INSERT INTO routine_sets (routine_exercise_id, set_number, weight, reps, notes) " +
-                            "VALUES (:routineExerciseId, :setNumber, 0, 0, NULL)")
+                            "VALUES (:routineExerciseId, :setNumber, :setWeight, :setReps, :setNotes)")
                        .param("routineExerciseId", routineExerciseId)
                        .param("setNumber", setNumber)
+                       .param("setWeight", setWeight)
+                       .param("setReps", setReps)
+                       .param("setNotes", setNotes)
                        .update();
 
         return this.findById(id,

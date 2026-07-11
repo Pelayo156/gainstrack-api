@@ -217,11 +217,17 @@ public class RoutineService {
         RoutineDetailResponse updated = this.routineRepository.saveExerciseSet(id,
                                                                                routineExerciseId,
                                                                                request.setNumber(),
+                                                                               request.weight(),
+                                                                               request.reps(),
+                                                                               request.notes(),
                                                                                user.getId());
-        LOG.info("Set agregado a rutina — routineId: {}, routineExerciseId: {}, setNumber: {}",
+        LOG.info("Set agregado a rutina — routineId: {}, routineExerciseId: {}, setNumber: {}, setWeight: {}, setReps: {}, setNotes: {}",
                  id,
                  routineExerciseId,
-                 request.setNumber());
+                 request.setNumber(),
+                 request.weight(),
+                 request.reps(),
+                 request.notes());
         return updated;
     }
 
