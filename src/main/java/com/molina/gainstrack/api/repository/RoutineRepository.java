@@ -399,9 +399,9 @@ public class RoutineRepository {
                                                    Long userId) {
         int affectedRows = this.jdbcClient.sql("UPDATE routine_sets " +
                                                "SET set_number = COALESCE(:setNumber, set_number), " +
-                                                   "weight = COALESCE(:weight, weight), " +
-                                                   "reps = COALESCE(:reps, reps), " +
-                                                   "notes = COALESCE(:notes, notes) " +
+                                                   "weight = :weight, " +
+                                                   "reps = :reps, " +
+                                                   "notes = :notes "+
                                                "WHERE id = :setId " +
                                                "AND routine_exercise_id = :routineExerciseId")
                                           .param("setNumber", setNumber)
