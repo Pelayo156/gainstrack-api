@@ -57,9 +57,10 @@ public class TrainingSessionService {
      * para la misma rutina y el mismo gimnasio (gymId null incluido, como "sin
      * gimnasio"/sesión libre): si existe una sesión previa se copian sus ejercicios
      * y sets reales; si es la primera vez, se copian desde la plantilla de la rutina.
-     * La fecha se asigna automáticamente como la fecha actual del servidor.
+     * Las notas de la sesión creada se heredan de esa misma fuente — no se reciben
+     * en el request. La fecha se asigna automáticamente como la fecha actual del servidor.
      *
-     * @param request datos de la sesión — routineId obligatorio, gymId y notes opcionales
+     * @param request datos de la sesión — routineId obligatorio, gymId opcional
      * @return TrainingSessionDetailResponse con el detalle completo de la sesión creada
      */
     @Transactional
@@ -67,8 +68,7 @@ public class TrainingSessionService {
         User user = this.authUtils.getAuthenticatedUser();
         TrainingSessionDetailResponse session = this.trainingSessionRepository.save(user.getId(),
                                                                                     request.gymId(),
-                                                                                    request.routineId(),
-                                                                                    request.notes());
+                                                                                    request.routineId());
         LOG.info("Nueva sesión creada — sessionId: {}, userId: {}, routineId: {}",
                 session.id(), user.getId(), request.routineId());
         return session;
@@ -102,6 +102,25 @@ public class TrainingSessionService {
     public TrainingSessionSummaryResponse findLastByRoutineAndGym(Long routineId, Long gymId) {
         User user = this.authUtils.getAuthenticatedUser();
         return this.trainingSessionRepository.findLastByRoutineAndGym(routineId, gymId, user.getId());
+    }
+
+    /**
+     * Retorna el resumen de todas las sesiones del usuario autenticado para una
+     * rutina y gimnasio específicos, ordenadas de más reciente a más antigua.
+     * Se usa para consultar el historial completo de entrenamientos de una rutina
+     * en un gimnasio puntual — por ejemplo, todas las sesiones de la rutina de
+     * piernas realizadas en un gimnasio determinado.
+     * gymId puede ser null para consultar sesiones sin gimnasio asociado
+     * (sesión libre de gimnasio) — se trata como un gimnasio más.
+     *
+     * @param routineId id de la rutina consultada
+     * @param gymId     id del gimnasio consultado — null representa sin gimnasio
+     * @return lista de sesiones ordenadas por fecha descendente — vacía si no
+     *         existe historial para esa combinación de rutina y gimnasio
+     */
+    public List<TrainingSessionSummaryResponse> findAllByRoutineAndGym(Long routineId, Long gymId) {
+        User user = this.authUtils.getAuthenticatedUser();
+        return this.trainingSessionRepository.findAllByRoutineAndGym(routineId, gymId, user.getId());
     }
 
     /**

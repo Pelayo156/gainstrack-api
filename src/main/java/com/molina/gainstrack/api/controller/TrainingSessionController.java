@@ -57,12 +57,34 @@ public class TrainingSessionController {
     }
 
     /**
+     * Retorna el resumen de todas las sesiones del usuario autenticado para una
+     * rutina y gimnasio específicos, ordenadas de más reciente a más antigua.
+     * Se usa para consultar el historial completo de entrenamientos de una rutina
+     * en un gimnasio puntual — por ejemplo, todas las sesiones de la rutina de
+     * piernas realizadas en un gimnasio determinado.
+     *
+     * @param routineId id de la rutina consultada
+     * @param gymId     id del gimnasio consultado — opcional, si se omite se
+     *                  consultan sesiones sin gimnasio asociado (sesión libre de gimnasio)
+     * @return 200 OK con la lista de sesiones encontradas — vacía si no existe
+     *         historial para esa combinación de rutina y gimnasio
+     */
+    @GetMapping("/history")
+    public ResponseEntity<List<TrainingSessionSummaryResponse>> findAllByRoutineAndGym(
+            @RequestParam("routineId") Long routineId,
+            @RequestParam(value = "gymId", required = false) Long gymId) {
+        return ResponseEntity.ok(this.trainingSessionService.findAllByRoutineAndGym(routineId, gymId));
+    }
+
+    /**
      * Crea una nueva sesión ejecutando una rutina existente.
      * El punto de partida de ejercicios y sets es la última sesión del usuario
      * para la misma rutina y el mismo gimnasio, si existe; de lo contrario,
-     * se copian desde la plantilla de la rutina.
+     * se copian desde la plantilla de la rutina. Las notas de la sesión creada
+     * se heredan de esa misma fuente — de la última sesión si existe, o de la
+     * plantilla de la rutina en caso contrario — por lo que no se reciben en el body.
      *
-     * @param request body con routineId obligatorio, gymId y notes opcionales
+     * @param request body con routineId obligatorio y gymId opcional
      * @return 201 Created con el detalle completo de la sesión creada
      */
    @PostMapping

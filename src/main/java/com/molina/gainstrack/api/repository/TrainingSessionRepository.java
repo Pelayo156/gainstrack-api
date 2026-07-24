@@ -109,26 +109,82 @@ public class TrainingSessionRepository {
     }
 
     /**
+     * Retorna el resumen de todas las sesiones del usuario para una rutina y
+     * gimnasio específicos, ordenadas de más reciente a más antigua.
+     * Se usa para consultar el historial completo de entrenamientos de una
+     * rutina en un gimnasio puntual — por ejemplo, todas las sesiones de la
+     * rutina de piernas realizadas en un gimnasio determinado.
+     * gymId puede ser null — se usa el operador NULL-safe <=> de MySQL para incluir
+     * sesiones sin gimnasio asociado (sesión libre de gimnasio) como un grupo
+     * válido de búsqueda, tratando null como un gimnasio más.
+     * Incluye los datos del gimnasio asociado mediante LEFT JOIN.
+     *
+     * @param routineId id de la rutina consultada
+     * @param gymId     id del gimnasio consultado — null representa sin gimnasio
+     * @param userId    id del usuario propietario — previene acceso a sesiones ajenas
+     * @return lista de sesiones ordenadas por fecha descendente — vacía si no
+     *         existe historial para esa combinación de rutina y gimnasio
+     */
+    public List<TrainingSessionSummaryResponse> findAllByRoutineAndGym(Long routineId,
+                                                                       Long gymId,
+                                                                       Long userId) {
+        return jdbcClient.sql("SELECT ts.id AS training_session_id, " +
+                              "g.id AS gym_id, " +
+                              "g.name AS gym_name, " +
+                              "ts.session_date AS training_session_date, " +
+                              "ts.notes AS training_session_notes " +
+                              "FROM training_sessions ts " +
+                              "LEFT JOIN gyms g ON ts.gym_id = g.id " +
+                              "WHERE ts.routine_id = :routineId AND ts.user_id = :userId " +
+                              "AND ts.gym_id <=> :gymId " +
+                              "ORDER BY ts.session_date DESC, ts.id DESC")
+                .param("routineId", routineId)
+                .param("userId", userId)
+                .param("gymId", gymId)
+                .query((rs, rowNum) -> {
+                    Long gymIdQuery = rs.getObject("gym_id", Long.class);
+                    GymResponse gym = gymIdQuery != null
+                            ? new GymResponse(gymIdQuery, rs.getString("gym_name"))
+                            : new GymResponse(null, "No especificado");
+
+                    return new TrainingSessionSummaryResponse(
+                            rs.getLong("training_session_id"),
+                            gym,
+                            rs.getDate("training_session_date")
+                                    .toLocalDate(),
+                            rs.getString("training_session_notes")
+                    );
+                })
+                .list();
+    }
+
+    /**
      * Crea una nueva sesión de entrenamiento ejecutando una rutina existente.
-     * El punto de partida de los ejercicios y sets depende del historial del usuario:
+     * El punto de partida de los ejercicios, sets y notas depende del historial del usuario:
      * - Si existe una sesión previa del usuario para la misma rutina y el mismo
      *   gimnasio (gymId null incluido, representando "sin gimnasio"/sesión libre),
-     *   se copian los ejercicios y sets reales de esa última sesión — permite
+     *   se copian los ejercicios, sets y notas reales de esa última sesión — permite
      *   continuar el progreso real registrado la última vez en ese gimnasio.
      * - Si es la primera vez que el usuario entrena esta rutina en ese gimnasio,
-     *   se copian los ejercicios y sets de referencia de la plantilla de la rutina.
-     * La fecha se asigna automáticamente con NOW() en MySQL.
-     * Delega a findById para retornar el detalle completo de la sesión creada.
+     *   se copian los ejercicios, sets y notas de referencia de la plantilla de la rutina.
+     * La búsqueda de la última sesión se hace antes del INSERT para poder heredar
+     * sus notas en el momento de creación. La fecha se asigna automáticamente con
+     * NOW() en MySQL. Delega a findById para retornar el detalle completo de la
+     * sesión creada.
      *
      * @param userId    id del usuario autenticado
      * @param gymId     id del gimnasio donde se realiza la sesión — puede ser null
      * @param routineId id de la rutina a ejecutar — obligatorio
-     * @param notes     título o descripción de la sesión ingresado por el usuario
      * @return TrainingSessionDetailResponse con la sesión completa incluyendo
-     *         ejercicios y sets copiados desde la última sesión o desde la rutina
+     *         ejercicios, sets y notas copiados desde la última sesión o desde la rutina
      */
     @Transactional
-    public TrainingSessionDetailResponse save(Long userId, Long gymId, Long routineId, String notes) {
+    public TrainingSessionDetailResponse save(Long userId, Long gymId, Long routineId) {
+
+        Long lastSessionId = this.findLastSessionId(userId, routineId, gymId);
+        String notes = lastSessionId != null
+                ? this.findSessionNotes(lastSessionId)
+                : this.findRoutineNotes(routineId);
 
         KeyHolder keyHolder = new GeneratedKeyHolder();
         this.jdbcClient.sql("INSERT INTO training_sessions (user_id, routine_id, gym_id, session_date, notes) " +
@@ -139,8 +195,6 @@ public class TrainingSessionRepository {
                        .param("notes", notes)
                        .update(keyHolder);
         Long sessionId = Objects.requireNonNull(keyHolder.getKey()).longValue();
-
-        Long lastSessionId = this.findLastSessionId(userId, routineId, gymId, sessionId);
 
         if (lastSessionId != null) {
             this.copyFromSession(sessionId, lastSessionId);
@@ -153,33 +207,59 @@ public class TrainingSessionRepository {
     }
 
     /**
-     * Busca la sesión más reciente del usuario para una rutina y gimnasio específicos,
-     * excluyendo la sesión recién creada. gymId puede ser null — en ese caso se
-     * consideran únicamente sesiones sin gimnasio asociado (sesión libre de gimnasio),
-     * tratando el valor null como un gimnasio más mediante el operador NULL-safe
-     * <=> de MySQL para comparar gym_id.
+     * Busca la sesión más reciente del usuario para una rutina y gimnasio específicos.
+     * gymId puede ser null — en ese caso se consideran únicamente sesiones sin gimnasio
+     * asociado (sesión libre de gimnasio), tratando el valor null como un gimnasio más
+     * mediante el operador NULL-safe <=> de MySQL para comparar gym_id.
      *
-     * @param userId           id del usuario propietario
-     * @param routineId        id de la rutina ejecutada
-     * @param gymId            id del gimnasio elegido para la sesión — null representa
-     *                         "sin gimnasio"
-     * @param excludeSessionId id de la sesión recién creada — se excluye de la búsqueda
+     * @param userId    id del usuario propietario
+     * @param routineId id de la rutina ejecutada
+     * @param gymId     id del gimnasio elegido para la sesión — null representa
+     *                  "sin gimnasio"
      * @return id de la última sesión encontrada, o null si no existe historial previo
      *         del usuario para esa rutina en ese gimnasio
      */
-    private Long findLastSessionId(Long userId, Long routineId, Long gymId, Long excludeSessionId) {
+    private Long findLastSessionId(Long userId, Long routineId, Long gymId) {
         return this.jdbcClient.sql("SELECT id FROM training_sessions " +
                                    "WHERE user_id = :userId AND routine_id = :routineId " +
-                                   "AND gym_id <=> :gymId AND id != :excludeSessionId " +
+                                   "AND gym_id <=> :gymId " +
                                    "ORDER BY session_date DESC, id DESC " +
                                    "LIMIT 1")
                               .param("userId", userId)
                               .param("routineId", routineId)
                               .param("gymId", gymId)
-                              .param("excludeSessionId", excludeSessionId)
                               .query(Long.class)
                               .optional()
                               .orElse(null);
+    }
+
+    /**
+     * Retorna las notas de una sesión de entrenamiento existente.
+     * Se usa para heredar las notas de la última sesión hacia la sesión recién creada.
+     *
+     * @param sessionId id de la sesión origen
+     * @return notas de la sesión, puede ser null
+     */
+    private String findSessionNotes(Long sessionId) {
+        return this.jdbcClient.sql("SELECT notes FROM training_sessions WHERE id = :sessionId")
+                              .param("sessionId", sessionId)
+                              .query(String.class)
+                              .single();
+    }
+
+    /**
+     * Retorna las notas de la plantilla de una rutina.
+     * Se usa para heredar las notas de la rutina hacia la sesión recién creada
+     * cuando no existe una sesión previa de la cual partir.
+     *
+     * @param routineId id de la rutina origen
+     * @return notas de la rutina, puede ser null
+     */
+    private String findRoutineNotes(Long routineId) {
+        return this.jdbcClient.sql("SELECT notes FROM routines WHERE id = :routineId")
+                              .param("routineId", routineId)
+                              .query(String.class)
+                              .single();
     }
 
     /**
