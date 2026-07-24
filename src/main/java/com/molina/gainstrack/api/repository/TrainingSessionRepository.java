@@ -110,8 +110,13 @@ public class TrainingSessionRepository {
 
     /**
      * Crea una nueva sesión de entrenamiento ejecutando una rutina existente.
-     * Copia automáticamente todos los ejercicios y sets de la rutina
-     * como punto de partida para el usuario durante la sesión.
+     * El punto de partida de los ejercicios y sets depende del historial del usuario:
+     * - Si existe una sesión previa del usuario para la misma rutina y el mismo
+     *   gimnasio (gymId null incluido, representando "sin gimnasio"/sesión libre),
+     *   se copian los ejercicios y sets reales de esa última sesión — permite
+     *   continuar el progreso real registrado la última vez en ese gimnasio.
+     * - Si es la primera vez que el usuario entrena esta rutina en ese gimnasio,
+     *   se copian los ejercicios y sets de referencia de la plantilla de la rutina.
      * La fecha se asigna automáticamente con NOW() en MySQL.
      * Delega a findById para retornar el detalle completo de la sesión creada.
      *
@@ -120,7 +125,7 @@ public class TrainingSessionRepository {
      * @param routineId id de la rutina a ejecutar — obligatorio
      * @param notes     título o descripción de la sesión ingresado por el usuario
      * @return TrainingSessionDetailResponse con la sesión completa incluyendo
-     *         ejercicios y sets copiados desde la rutina
+     *         ejercicios y sets copiados desde la última sesión o desde la rutina
      */
     @Transactional
     public TrainingSessionDetailResponse save(Long userId, Long gymId, Long routineId, String notes) {
@@ -135,37 +140,135 @@ public class TrainingSessionRepository {
                        .update(keyHolder);
         Long sessionId = Objects.requireNonNull(keyHolder.getKey()).longValue();
 
-        // Se obtienen los ejercicios de la rutina que está asociada a la sesión
-        List<RoutineExerciseRow> routineExercises =
+        Long lastSessionId = this.findLastSessionId(userId, routineId, gymId, sessionId);
+
+        if (lastSessionId != null) {
+            this.copyFromSession(sessionId, lastSessionId);
+        } else {
+            this.copyFromRoutineTemplate(sessionId, routineId);
+        }
+
+        // Query 1: Datos sesión recién creada
+        return this.findById(sessionId, userId);
+    }
+
+    /**
+     * Busca la sesión más reciente del usuario para una rutina y gimnasio específicos,
+     * excluyendo la sesión recién creada. gymId puede ser null — en ese caso se
+     * consideran únicamente sesiones sin gimnasio asociado (sesión libre de gimnasio),
+     * tratando el valor null como un gimnasio más mediante el operador NULL-safe
+     * <=> de MySQL para comparar gym_id.
+     *
+     * @param userId           id del usuario propietario
+     * @param routineId        id de la rutina ejecutada
+     * @param gymId            id del gimnasio elegido para la sesión — null representa
+     *                         "sin gimnasio"
+     * @param excludeSessionId id de la sesión recién creada — se excluye de la búsqueda
+     * @return id de la última sesión encontrada, o null si no existe historial previo
+     *         del usuario para esa rutina en ese gimnasio
+     */
+    private Long findLastSessionId(Long userId, Long routineId, Long gymId, Long excludeSessionId) {
+        return this.jdbcClient.sql("SELECT id FROM training_sessions " +
+                                   "WHERE user_id = :userId AND routine_id = :routineId " +
+                                   "AND gym_id <=> :gymId AND id != :excludeSessionId " +
+                                   "ORDER BY session_date DESC, id DESC " +
+                                   "LIMIT 1")
+                              .param("userId", userId)
+                              .param("routineId", routineId)
+                              .param("gymId", gymId)
+                              .param("excludeSessionId", excludeSessionId)
+                              .query(Long.class)
+                              .optional()
+                              .orElse(null);
+    }
+
+    /**
+     * Copia ejercicios y sets desde una sesión previa hacia la sesión recién creada.
+     * Se usa como punto de partida cuando el usuario ya entrenó esta rutina en el
+     * gimnasio elegido — preserva los pesos y reps reales registrados la última vez,
+     * en vez de los valores de referencia de la plantilla de la rutina.
+     *
+     * @param newSessionId  id de la sesión recién creada
+     * @param lastSessionId id de la última sesión del usuario para la misma rutina y gimnasio
+     */
+    private void copyFromSession(Long newSessionId, Long lastSessionId) {
+        List<ExerciseCopyRow> lastSessionExercises =
+                jdbcClient.sql("SELECT id, exercise_id, order_index, notes " +
+                               "FROM session_exercises " +
+                               "WHERE session_id = :lastSessionId")
+                          .param("lastSessionId", lastSessionId)
+                          .query(ExerciseCopyRow.class)
+                          .list();
+
+        for (ExerciseCopyRow exercise : lastSessionExercises) {
+            KeyHolder keyHolder = new GeneratedKeyHolder();
+            jdbcClient.sql("INSERT INTO session_exercises (session_id, exercise_id, order_index, notes) " +
+                            "VALUES (:sessionId, :exerciseId, :orderIndex, :notes)")
+                      .param("sessionId", newSessionId)
+                      .param("exerciseId", exercise.exerciseId())
+                      .param("orderIndex", exercise.orderIndex())
+                      .param("notes", exercise.notes())
+                      .update(keyHolder);
+            Long newSessionExerciseId = Objects.requireNonNull(keyHolder.getKey()).longValue();
+
+            List<SetCopyRow> lastSessionSets =
+                    jdbcClient.sql("SELECT set_number, weight, reps, notes " +
+                                   "FROM sets " +
+                                   "WHERE session_exercise_id = :sessionExerciseId")
+                              .param("sessionExerciseId", exercise.id())
+                              .query(SetCopyRow.class)
+                              .list();
+
+            for (SetCopyRow set : lastSessionSets) {
+                jdbcClient.sql("INSERT INTO sets (session_exercise_id, set_number, weight, reps, notes) " +
+                               "VALUES (:sessionExerciseId, :setNumber, :weight, :reps, :notes)")
+                          .param("sessionExerciseId", newSessionExerciseId)
+                          .param("setNumber", set.setNumber())
+                          .param("weight", set.weight())
+                          .param("reps", set.reps())
+                          .param("notes", set.notes())
+                          .update();
+            }
+        }
+    }
+
+    /**
+     * Copia ejercicios y sets desde la plantilla de la rutina hacia la sesión recién creada.
+     * Se usa cuando el usuario entrena esta rutina por primera vez en el gimnasio elegido
+     * y no existe una sesión previa de la cual partir.
+     *
+     * @param newSessionId id de la sesión recién creada
+     * @param routineId    id de la rutina cuya plantilla se copia
+     */
+    private void copyFromRoutineTemplate(Long newSessionId, Long routineId) {
+        List<ExerciseCopyRow> routineExercises =
                 jdbcClient.sql("SELECT id, exercise_id, order_index, notes " +
                                "FROM routine_exercises " +
                                "WHERE routine_id = :routineId")
                           .param("routineId", routineId)
-                          .query(RoutineExerciseRow.class)
+                          .query(ExerciseCopyRow.class)
                           .list();
 
-        for (RoutineExerciseRow routineExercise : routineExercises) {
-            // Inserto ejercicio dentro de session_exercises
+        for (ExerciseCopyRow routineExercise : routineExercises) {
+            KeyHolder keyHolder = new GeneratedKeyHolder();
             jdbcClient.sql("INSERT INTO session_exercises (session_id, exercise_id, order_index, notes) " +
                             "VALUES (:sessionId, :exerciseId, :orderIndex, :notes)")
-                      .param("sessionId", sessionId)
+                      .param("sessionId", newSessionId)
                       .param("exerciseId", routineExercise.exerciseId())
                       .param("orderIndex", routineExercise.orderIndex())
                       .param("notes", routineExercise.notes())
                       .update(keyHolder);
-            Long sessionExerciseId = keyHolder.getKey().longValue();
+            Long sessionExerciseId = Objects.requireNonNull(keyHolder.getKey()).longValue();
 
-            // Se obtienen sets asociados a cada ejercicio de la rutina
-            List<SetRow> routineExerciseSets =
-                    jdbcClient.sql("SELECT id, set_number, weight, reps, notes " +
+            List<SetCopyRow> routineExerciseSets =
+                    jdbcClient.sql("SELECT set_number, weight, reps, notes " +
                                    "FROM routine_sets " +
                                    "WHERE routine_exercise_id = :routineExerciseId")
                               .param("routineExerciseId", routineExercise.id())
-                              .query(SetRow.class)
+                              .query(SetCopyRow.class)
                               .list();
 
-            for (SetRow set : routineExerciseSets) {
-                // se insertan sets de cada ejercicio de la rutina
+            for (SetCopyRow set : routineExerciseSets) {
                 jdbcClient.sql("INSERT INTO sets (session_exercise_id, set_number, weight, reps, notes) " +
                                "VALUES (:sessionExerciseId, :setNumber, :weight, :reps, :notes)")
                           .param("sessionExerciseId", sessionExerciseId)
@@ -176,9 +279,54 @@ public class TrainingSessionRepository {
                           .update();
             }
         }
+    }
 
-        // Query 1: Datos sesión recién creada
-        return this.findById(sessionId, userId);
+    /**
+     * Retorna el resumen de la última sesión de entrenamiento del usuario para una
+     * rutina y gimnasio específicos, ordenada por fecha descendente.
+     * gymId puede ser null — se usa el operador NULL-safe <=> de MySQL para incluir
+     * sesiones sin gimnasio asociado (sesión libre de gimnasio) como un grupo
+     * válido de búsqueda, tratando null como un gimnasio más.
+     * Incluye los datos del gimnasio asociado mediante LEFT JOIN.
+     *
+     * @param routineId id de la rutina consultada
+     * @param gymId     id del gimnasio consultado — null representa sin gimnasio
+     * @param userId    id del usuario propietario — previene acceso a sesiones ajenas
+     * @return TrainingSessionSummaryResponse con el resumen de la última sesión encontrada
+     * @throws NotFoundException si no existe una sesión previa para esa combinación
+     */
+    public TrainingSessionSummaryResponse findLastByRoutineAndGym(Long routineId, Long gymId, Long userId) {
+        return jdbcClient.sql("SELECT ts.id AS training_session_id, " +
+                              "g.id AS gym_id, " +
+                              "g.name AS gym_name, " +
+                              "ts.session_date AS training_session_date, " +
+                              "ts.notes AS training_session_notes " +
+                              "FROM training_sessions ts " +
+                              "LEFT JOIN gyms g ON ts.gym_id = g.id " +
+                              "WHERE ts.routine_id = :routineId AND ts.user_id = :userId " +
+                              "AND ts.gym_id <=> :gymId " +
+                              "ORDER BY ts.session_date DESC, ts.id DESC " +
+                              "LIMIT 1")
+                .param("routineId", routineId)
+                .param("userId", userId)
+                .param("gymId", gymId)
+                .query((rs, rowNum) -> {
+                    Long gymIdQuery = rs.getObject("gym_id", Long.class);
+                    GymResponse gym = gymIdQuery != null
+                            ? new GymResponse(gymIdQuery, rs.getString("gym_name"))
+                            : new GymResponse(null, "No especificado");
+
+                    return new TrainingSessionSummaryResponse(
+                            rs.getLong("training_session_id"),
+                            gym,
+                            rs.getDate("training_session_date")
+                                    .toLocalDate(),
+                            rs.getString("training_session_notes")
+                    );
+                })
+                .optional()
+                .orElseThrow(() -> new NotFoundException(
+                        "No existe una sesión previa para la rutina y gimnasio especificados"));
     }
 
     /**
@@ -535,32 +683,36 @@ public class TrainingSessionRepository {
     }
 
     /**
-     * Record interno usado para mapear filas de routine_exercises
-     * durante la creación de una sesión desde una rutina.
+     * Record interno usado para mapear filas de ejercicios durante la copia
+     * hacia una nueva sesión — se reutiliza tanto para routine_exercises
+     * (plantilla de rutina) como para session_exercises (última sesión),
+     * ya que ambas tablas comparten el mismo esquema de columnas relevantes.
      * Proyección parcial — solo los campos necesarios para la copia.
      *
-     * @param id          id del registro en routine_exercises
+     * @param id          id del registro origen (en routine_exercises o session_exercises)
      * @param exerciseId  id del ejercicio del catálogo asociado
-     * @param orderIndex  orden del ejercicio dentro de la rutina
-     * @param notes       notas opcionales del ejercicio en la rutina
+     * @param orderIndex  orden del ejercicio dentro de la rutina o sesión
+     * @param notes       notas opcionales del ejercicio
      */
-    private record RoutineExerciseRow(Long id,
-                                      Long exerciseId,
-                                      Integer orderIndex,
-                                      String notes) {}
+    private record ExerciseCopyRow(Long id,
+                                   Long exerciseId,
+                                   Integer orderIndex,
+                                   String notes) {}
 
     /**
-     * Record interno usado para mapear filas de routine_sets
-     * durante la copia de sets desde una rutina a una sesión.
+     * Record interno usado para mapear filas de sets durante la copia
+     * hacia una nueva sesión — se reutiliza tanto para routine_sets
+     * (plantilla de rutina) como para sets (última sesión), ya que ambas
+     * tablas comparten el mismo esquema de columnas relevantes.
      * Proyección parcial — solo los campos necesarios para la copia.
      *
      * @param setNumber número de serie dentro del ejercicio
-     * @param weight    peso de referencia en kilogramos
-     * @param reps      repeticiones de referencia
+     * @param weight    peso en kilogramos
+     * @param reps      repeticiones
      * @param notes     notas opcionales del set
      */
-    private record SetRow(Integer setNumber,
-                          Double weight,
-                          Integer reps,
-                          String notes) {}
+    private record SetCopyRow(Integer setNumber,
+                              Double weight,
+                              Integer reps,
+                              String notes) {}
 }

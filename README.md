@@ -15,11 +15,18 @@ inmutables organizadas como carpetas.
 
 1. El usuario crea **rutinas** con ejercicios y sets de referencia
    (peso y reps actuales)
-2. Al entrenar, **ejecuta una rutina** — esto crea una sesión que copia
-   los ejercicios y sets como punto de partida
-3. El usuario ajusta pesos y reps reales durante el entrenamiento
-4. Al terminar, ingresa notas y la sesión queda **inmutable**
-5. Las sesiones se organizan dentro de la carpeta de su rutina,
+2. Antes de entrenar, el usuario elige el **gimnasio** donde va a
+   entrenar en ese momento
+3. Al **ejecutar una rutina**, se crea una sesión que copia como punto
+   de partida:
+   - los ejercicios y sets de la **última sesión** del usuario para esa
+     misma rutina en ese mismo gimnasio (gymId null cuenta como un
+     gimnasio más — "sesión libre de gimnasio"), si existe, o
+   - los ejercicios y sets de referencia de la **plantilla de la
+     rutina**, si es la primera vez que la entrena en ese gimnasio
+4. El usuario ajusta pesos y reps reales durante el entrenamiento
+5. Al terminar, ingresa notas y la sesión queda **inmutable**
+6. Las sesiones se organizan dentro de la carpeta de su rutina,
    ordenadas de más reciente a más antigua
 
 ### Conceptos clave
@@ -141,6 +148,7 @@ PATCH  /api/v1/routines/{id}/exercises/{routineExerciseId}/sets/{setId}
 ### Sesiones
 ```
 GET    /api/v1/sessions
+GET    /api/v1/sessions/last?routineId={routineId}&gymId={gymId}
 GET    /api/v1/sessions/{id}
 POST   /api/v1/sessions
 PATCH  /api/v1/sessions/{id}
@@ -212,4 +220,9 @@ src/main/resources
 - **Sesiones inmutables** — preservan el historial real de entrenamiento
 - **Soft delete en exercises** — preserva integridad del historial de sesiones
 - **COALESCE en PATCH** — edición parcial sin sobrescribir campos no enviados
+- **Sesión creada desde el último entrenamiento por gimnasio** — al crear una
+  sesión se busca la última sesión del usuario para la misma rutina y el mismo
+  gimnasio (comparando `gym_id` con el operador NULL-safe `<=>` de MySQL, para
+  que "sin gimnasio" también cuente como un grupo válido) y se copian sus
+  ejercicios y sets reales; si no existe, se cae a la plantilla de la rutina
 - **Virtual Threads** — mejor rendimiento en operaciones I/O concurrentes

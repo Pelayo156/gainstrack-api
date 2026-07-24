@@ -53,7 +53,10 @@ public class TrainingSessionService {
 
     /**
      * Crea una nueva sesión de entrenamiento para el usuario autenticado.
-     * Copia ejercicios y sets desde la rutina indicada como punto de partida.
+     * El punto de partida de ejercicios y sets depende del historial del usuario
+     * para la misma rutina y el mismo gimnasio (gymId null incluido, como "sin
+     * gimnasio"/sesión libre): si existe una sesión previa se copian sus ejercicios
+     * y sets reales; si es la primera vez, se copian desde la plantilla de la rutina.
      * La fecha se asigna automáticamente como la fecha actual del servidor.
      *
      * @param request datos de la sesión — routineId obligatorio, gymId y notes opcionales
@@ -81,6 +84,24 @@ public class TrainingSessionService {
     public TrainingSessionDetailResponse findById(Long id) {
         User user = this.authUtils.getAuthenticatedUser();
         return this.trainingSessionRepository.findById(id, user.getId());
+    }
+
+    /**
+     * Retorna el resumen de la última sesión del usuario autenticado para una
+     * rutina y gimnasio específicos. Se usa en el flujo de inicio de entrenamiento:
+     * el usuario elige el gimnasio donde va a entrenar y el frontend consulta la
+     * última sesión de esa rutina en ese gimnasio antes de crear la nueva sesión.
+     * gymId puede ser null para consultar sesiones sin gimnasio asociado
+     * (sesión libre de gimnasio) — se trata como un gimnasio más.
+     *
+     * @param routineId id de la rutina consultada
+     * @param gymId     id del gimnasio consultado — null representa sin gimnasio
+     * @return TrainingSessionSummaryResponse con el resumen de la última sesión
+     * @throws NotFoundException si no existe una sesión previa para esa combinación
+     */
+    public TrainingSessionSummaryResponse findLastByRoutineAndGym(Long routineId, Long gymId) {
+        User user = this.authUtils.getAuthenticatedUser();
+        return this.trainingSessionRepository.findLastByRoutineAndGym(routineId, gymId, user.getId());
     }
 
     /**

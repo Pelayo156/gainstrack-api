@@ -38,8 +38,29 @@ public class TrainingSessionController {
    }
 
     /**
+     * Retorna el resumen de la última sesión de entrenamiento del usuario autenticado
+     * para una rutina y gimnasio específicos.
+     * Se usa en el flujo de inicio de entrenamiento: el usuario elige en qué gimnasio
+     * va a entrenar y el frontend consulta la última sesión de esa rutina en ese
+     * gimnasio para mostrar el progreso previo antes de crear la nueva sesión.
+     *
+     * @param routineId id de la rutina consultada
+     * @param gymId     id del gimnasio consultado — opcional, si se omite se
+     *                  consultan sesiones sin gimnasio asociado (sesión libre de gimnasio)
+     * @return 200 OK con el resumen de la última sesión encontrada
+     */
+    @GetMapping("/last")
+    public ResponseEntity<TrainingSessionSummaryResponse> findLastByRoutineAndGym(
+            @RequestParam("routineId") Long routineId,
+            @RequestParam(value = "gymId", required = false) Long gymId) {
+        return ResponseEntity.ok(this.trainingSessionService.findLastByRoutineAndGym(routineId, gymId));
+    }
+
+    /**
      * Crea una nueva sesión ejecutando una rutina existente.
-     * Copia automáticamente ejercicios y sets de la rutina como punto de partida.
+     * El punto de partida de ejercicios y sets es la última sesión del usuario
+     * para la misma rutina y el mismo gimnasio, si existe; de lo contrario,
+     * se copian desde la plantilla de la rutina.
      *
      * @param request body con routineId obligatorio, gymId y notes opcionales
      * @return 201 Created con el detalle completo de la sesión creada
