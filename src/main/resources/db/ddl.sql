@@ -1,5 +1,5 @@
 -- ============================================================
--- GainsTrack — DDL Final v2
+-- GainsTrack — DDL Final v3
 -- Motor: MySQL 8.0+
 -- Orden: de tablas sin dependencias hacia las que dependen de otras
 -- ============================================================
@@ -41,12 +41,13 @@ CREATE TABLE users (
     CONSTRAINT uq_users_google_id UNIQUE (google_id)
 );
 
+
 -- ------------------------------------------------------------
 -- 3. gyms
 -- Gimnasios registrados por cada usuario.
--- is_primary: solo un gym por usuario puede ser TRUE.
--- Se controla a nivel de aplicación — MySQL no soporta UNIQUE parcial.
 -- CASCADE: al eliminar usuario se eliminan sus gyms.
+-- SET NULL en training_sessions: al eliminar gym, las sesiones
+--   asociadas quedan sin gym — se muestra "No especificado".
 -- ------------------------------------------------------------
 CREATE TABLE gyms (
     id         BIGINT       NOT NULL AUTO_INCREMENT,
@@ -95,7 +96,6 @@ CREATE INDEX idx_exercises_user_id ON exercises(user_id);
 -- is_free: identifica la rutina especial "Sesión Libre" —
 --          creada automáticamente al registrar el usuario,
 --          no eliminable, solo renombrable.
--- El nombre de la carpeta es siempre igual al nombre de la rutina.
 -- CASCADE: al eliminar usuario se eliminan sus rutinas.
 -- CASCADE: al eliminar rutina se eliminan sus sesiones asociadas.
 -- ------------------------------------------------------------
@@ -144,6 +144,7 @@ CREATE INDEX idx_routine_exercises_routine_id ON routine_exercises(routine_id);
 -- Define peso y repeticiones sugeridos como plantilla.
 -- Al ejecutar una rutina, estos sets se copian en la tabla sets
 -- como punto de partida editable por el usuario durante la sesión.
+-- weight y reps son NULL cuando el usuario no conoce los valores.
 -- Las modificaciones en la sesión no alteran estos valores.
 -- CASCADE: al eliminar routine_exercise se eliminan sus sets.
 -- ------------------------------------------------------------
@@ -151,8 +152,8 @@ CREATE TABLE routine_sets (
     id                  BIGINT       NOT NULL AUTO_INCREMENT,
     routine_exercise_id BIGINT       NOT NULL,
     set_number          INT          NOT NULL,
-    weight              DECIMAL(5,2) NOT NULL,
-    reps                INT          NOT NULL,
+    weight              DECIMAL(5,2) NULL,      -- NULL si el usuario no conoce el peso
+    reps                INT          NULL,       -- NULL si el usuario no conoce las reps
     notes               TEXT         NULL,
     CONSTRAINT pk_routine_sets        PRIMARY KEY (id),
     CONSTRAINT fk_rs_routine_exercise FOREIGN KEY (routine_exercise_id)
@@ -169,14 +170,13 @@ CREATE INDEX idx_routine_sets_routine_exercise_id
 -- Ejecuciones reales de una rutina en una fecha específica.
 -- routine_id NOT NULL: toda sesión pertenece a una rutina —
 --   sesiones libres se asocian a la rutina especial is_free = TRUE.
--- gym_id NOT NULL: toda sesión debe tener un gym asociado.
+-- gym_id NULL: el gym es opcional — se muestra "No especificado".
 -- Las sesiones son inmutables una vez completadas — se controla
 -- a nivel de aplicación.
 -- Las sesiones se pueden mover entre rutinas actualizando routine_id.
+-- CASCADE en user:    al eliminar usuario se eliminan sus sesiones.
 -- CASCADE en routine: al eliminar rutina se eliminan sus sesiones.
--- CASCADE en gym: al eliminar gym se eliminan sus sesiones.
--- CASCADE en user: al eliminar usuario se eliminan sus sesiones.
--- ------------------------------------------------------------
+-- SET NULL en gym:    al eliminar gym las sesiones quedan sin gym.
 -- ------------------------------------------------------------
 CREATE TABLE training_sessions (
     id           BIGINT    NOT NULL AUTO_INCREMENT,
@@ -196,7 +196,7 @@ CREATE TABLE training_sessions (
 );
 
 -- Índice compuesto: optimiza consultas históricas por usuario + fecha
-CREATE INDEX idx_ts_user_date ON training_sessions(user_id, session_date);
+CREATE INDEX idx_ts_user_date  ON training_sessions(user_id, session_date);
 -- Índice para consultas por rutina: listar sesiones de una carpeta
 CREATE INDEX idx_ts_routine_id ON training_sessions(routine_id);
 
@@ -209,7 +209,7 @@ CREATE INDEX idx_ts_routine_id ON training_sessions(routine_id);
 -- Sin UNIQUE en (session_id, exercise_id): un ejercicio puede
 -- repetirse dentro de la misma sesión.
 -- order_index: define el orden de los ejercicios en la sesión.
--- CASCADE en session: al eliminar sesión se eliminan sus ejercicios.
+-- CASCADE en session:  al eliminar sesión se eliminan sus ejercicios.
 -- RESTRICT en exercise: preserva el historial aunque el ejercicio
 -- sea eliminado con soft delete.
 -- ------------------------------------------------------------
@@ -235,6 +235,7 @@ CREATE INDEX idx_se_session_exercise ON session_exercises(session_id, exercise_i
 -- Series realizadas dentro de un ejercicio de sesión.
 -- Copiados desde routine_sets al ejecutar una rutina,
 -- o agregados manualmente en sesiones libres.
+-- weight y reps son NULL cuando el usuario no conoce los valores.
 -- weight: DECIMAL(5,2) soporta hasta 999.99 kg con exactitud garantizada.
 -- CASCADE: al eliminar session_exercise se eliminan sus sets.
 -- ------------------------------------------------------------
@@ -242,8 +243,8 @@ CREATE TABLE sets (
     id                  BIGINT       NOT NULL AUTO_INCREMENT,
     session_exercise_id BIGINT       NOT NULL,
     set_number          INT          NOT NULL,
-    weight              DECIMAL(5,2) NOT NULL,
-    reps                INT          NOT NULL,
+    weight              DECIMAL(5,2) NULL,      -- NULL si el usuario no conoce el peso
+    reps                INT          NULL,       -- NULL si el usuario no conoce las reps
     notes               TEXT         NULL,
     CONSTRAINT pk_sets            PRIMARY KEY (id),
     CONSTRAINT fk_sets_session_ex FOREIGN KEY (session_exercise_id)
@@ -252,43 +253,6 @@ CREATE TABLE sets (
 );
 
 CREATE INDEX idx_sets_session_exercise_id ON sets(session_exercise_id);
-
-
--- ------------------------------------------------------------
--- 11. gym_exercise_conversions
--- Feature opcional de normalización de pesos entre gimnasios.
--- Permite comparar el progreso histórico cuando el usuario
--- entrena en diferentes gyms con máquinas que tienen distintas
--- sensaciones de peso.
--- Semántica: peso_en_gym_id × conversion_factor = equivalente en reference_gym_id
--- conversion_factor DECIMAL(5,4): 4 decimales para evitar pérdida
--- de precisión al multiplicar antes de redondear a 2 decimales.
--- UNIQUE: un usuario no puede tener dos factores para el mismo
--- par gym + ejercicio.
--- CASCADE en todos los FK: al eliminar usuario, gym o ejercicio
--- se eliminan sus conversiones asociadas.
--- ------------------------------------------------------------
-CREATE TABLE gym_exercise_conversions (
-    id                BIGINT       NOT NULL AUTO_INCREMENT,
-    user_id           BIGINT       NOT NULL,
-    exercise_id       BIGINT       NOT NULL,
-    gym_id            BIGINT       NOT NULL,
-    reference_gym_id  BIGINT       NOT NULL,
-    conversion_factor DECIMAL(5,4) NOT NULL,
-    created_at        TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT pk_gym_exercise_conv   PRIMARY KEY (id),
-    CONSTRAINT fk_gec_user            FOREIGN KEY (user_id)
-                                      REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT fk_gec_exercise        FOREIGN KEY (exercise_id)
-                                      REFERENCES exercises(id) ON DELETE CASCADE,
-    CONSTRAINT fk_gec_gym             FOREIGN KEY (gym_id)
-                                      REFERENCES gyms(id) ON DELETE CASCADE,
-    CONSTRAINT fk_gec_reference_gym   FOREIGN KEY (reference_gym_id)
-                                      REFERENCES gyms(id) ON DELETE CASCADE,
-    CONSTRAINT uq_gec UNIQUE (user_id, exercise_id, gym_id, reference_gym_id)
-);
-
-CREATE INDEX idx_gec_user_exercise ON gym_exercise_conversions(user_id, exercise_id);
 
 -- ============================================================
 -- GainsTrack — Limpieza de tablas

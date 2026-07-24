@@ -35,3 +35,4 @@ build/
 ### Gainstrack ###
 .env
 start.sh
+deploy.sh
