@@ -11,7 +11,10 @@ import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -163,8 +166,12 @@ public class TrainingSessionRepository {
      * El punto de partida de los ejercicios, sets y notas depende del historial del usuario:
      * - Si existe una sesión previa del usuario para la misma rutina y el mismo
      *   gimnasio (gymId null incluido, representando "sin gimnasio"/sesión libre),
-     *   se copian los ejercicios, sets y notas reales de esa última sesión — permite
-     *   continuar el progreso real registrado la última vez en ese gimnasio.
+     *   se hace un merge dirigido por la rutina actual: la estructura (qué ejercicios,
+     *   en qué orden y cuántos sets) proviene de la rutina, y sobre ella se sobreescriben
+     *   peso/reps con los valores reales de la última sesión en ese gimnasio para los
+     *   ejercicios y sets que ya existían. Los ejercicios de la rutina que no estaban en
+     *   la última sesión usan sus valores de referencia; los que ya no están en la rutina
+     *   se descartan. Ver {@link #copyMergingRoutineAndLastSession}.
      * - Si es la primera vez que el usuario entrena esta rutina en ese gimnasio,
      *   se copian los ejercicios, sets y notas de referencia de la plantilla de la rutina.
      * La búsqueda de la última sesión se hace antes del INSERT para poder heredar
@@ -176,7 +183,7 @@ public class TrainingSessionRepository {
      * @param gymId     id del gimnasio donde se realiza la sesión — puede ser null
      * @param routineId id de la rutina a ejecutar — obligatorio
      * @return TrainingSessionDetailResponse con la sesión completa incluyendo
-     *         ejercicios, sets y notas copiados desde la última sesión o desde la rutina
+     *         ejercicios y sets resultantes del merge, o copiados de la plantilla
      */
     @Transactional
     public TrainingSessionDetailResponse save(Long userId, Long gymId, Long routineId) {
@@ -197,7 +204,7 @@ public class TrainingSessionRepository {
         Long sessionId = Objects.requireNonNull(keyHolder.getKey()).longValue();
 
         if (lastSessionId != null) {
-            this.copyFromSession(sessionId, lastSessionId);
+            this.copyMergingRoutineAndLastSession(sessionId, routineId, lastSessionId);
         } else {
             this.copyFromRoutineTemplate(sessionId, routineId);
         }
@@ -263,50 +270,124 @@ public class TrainingSessionRepository {
     }
 
     /**
-     * Copia ejercicios y sets desde una sesión previa hacia la sesión recién creada.
-     * Se usa como punto de partida cuando el usuario ya entrenó esta rutina en el
-     * gimnasio elegido — preserva los pesos y reps reales registrados la última vez,
-     * en vez de los valores de referencia de la plantilla de la rutina.
+     * Construye los ejercicios y sets de la sesión recién creada mezclando la
+     * estructura de la rutina actual con los pesos/reps reales de la última sesión
+     * del usuario para esa rutina en ese gimnasio.
+     *
+     * La rutina actual es la fuente de verdad de la estructura: qué ejercicios,
+     * en qué orden (order_index) y cuántos sets (por set_number). Sobre esa
+     * estructura se resuelven tres casos:
+     * - Ejercicio en la rutina Y en la última sesión: se conserva el order_index
+     *   de la rutina, las notas del ejercicio se heredan de la última sesión, y
+     *   para cada set de la rutina se sobreescriben weight/reps/notes con los del
+     *   set de la última sesión que tenga el mismo set_number; si la última sesión
+     *   no tiene ese set_number, quedan los valores de referencia de la rutina.
+     * - Ejercicio en la rutina pero NO en la última sesión: se copian tal cual los
+     *   valores de referencia de la plantilla (order_index, notas y sets).
+     * - Ejercicio en la última sesión pero YA NO en la rutina: se descarta.
+     *
+     * Un mismo exercise_id puede aparecer más de una vez dentro de una rutina o
+     * sesión (lo permite el esquema). El emparejamiento se hace por ocurrencia:
+     * la N-ésima aparición del ejercicio en la rutina se empareja con la N-ésima
+     * de la última sesión.
      *
      * @param newSessionId  id de la sesión recién creada
+     * @param routineId     id de la rutina cuya estructura se ejecuta
      * @param lastSessionId id de la última sesión del usuario para la misma rutina y gimnasio
      */
-    private void copyFromSession(Long newSessionId, Long lastSessionId) {
+    private void copyMergingRoutineAndLastSession(Long newSessionId, Long routineId, Long lastSessionId) {
+        // Ejercicios de la última sesión agrupados por exercise_id, en orden de aparición,
+        // para emparejar por ocurrencia cuando un mismo ejercicio se repite.
         List<ExerciseCopyRow> lastSessionExercises =
                 jdbcClient.sql("SELECT id, exercise_id, order_index, notes " +
                                "FROM session_exercises " +
-                               "WHERE session_id = :lastSessionId")
+                               "WHERE session_id = :lastSessionId " +
+                               "ORDER BY order_index, id")
                           .param("lastSessionId", lastSessionId)
                           .query(ExerciseCopyRow.class)
                           .list();
 
+        Map<Long, List<ExerciseCopyRow>> lastByExerciseId = new HashMap<>();
         for (ExerciseCopyRow exercise : lastSessionExercises) {
-            KeyHolder keyHolder = new GeneratedKeyHolder();
-            jdbcClient.sql("INSERT INTO session_exercises (session_id, exercise_id, order_index, notes) " +
-                            "VALUES (:sessionId, :exerciseId, :orderIndex, :notes)")
-                      .param("sessionId", newSessionId)
-                      .param("exerciseId", exercise.exerciseId())
-                      .param("orderIndex", exercise.orderIndex())
-                      .param("notes", exercise.notes())
-                      .update(keyHolder);
-            Long newSessionExerciseId = Objects.requireNonNull(keyHolder.getKey()).longValue();
+            lastByExerciseId.computeIfAbsent(exercise.exerciseId(), k -> new ArrayList<>())
+                            .add(exercise);
+        }
 
-            List<SetCopyRow> lastSessionSets =
+        // Sets de cada ejercicio de la última sesión, indexados por set_number para el overlay.
+        Map<Long, Map<Integer, SetCopyRow>> lastSetsByExerciseRow = new HashMap<>();
+        for (ExerciseCopyRow exercise : lastSessionExercises) {
+            List<SetCopyRow> sets =
                     jdbcClient.sql("SELECT set_number, weight, reps, notes " +
                                    "FROM sets " +
                                    "WHERE session_exercise_id = :sessionExerciseId")
                               .param("sessionExerciseId", exercise.id())
                               .query(SetCopyRow.class)
                               .list();
+            Map<Integer, SetCopyRow> bySetNumber = new HashMap<>();
+            for (SetCopyRow set : sets) {
+                bySetNumber.put(set.setNumber(), set);
+            }
+            lastSetsByExerciseRow.put(exercise.id(), bySetNumber);
+        }
 
-            for (SetCopyRow set : lastSessionSets) {
+        // Estructura: ejercicios de la rutina actual, en su orden.
+        List<ExerciseCopyRow> routineExercises =
+                jdbcClient.sql("SELECT id, exercise_id, order_index, notes " +
+                               "FROM routine_exercises " +
+                               "WHERE routine_id = :routineId " +
+                               "ORDER BY order_index, id")
+                          .param("routineId", routineId)
+                          .query(ExerciseCopyRow.class)
+                          .list();
+
+        // Contador de ocurrencias por exercise_id para el emparejamiento posicional.
+        Map<Long, Integer> occurrenceByExerciseId = new HashMap<>();
+
+        for (ExerciseCopyRow routineExercise : routineExercises) {
+            int occurrence = occurrenceByExerciseId.merge(routineExercise.exerciseId(), 1, Integer::sum) - 1;
+            List<ExerciseCopyRow> candidates = lastByExerciseId.get(routineExercise.exerciseId());
+            ExerciseCopyRow matched = (candidates != null && occurrence < candidates.size())
+                    ? candidates.get(occurrence)
+                    : null;
+
+            String exerciseNotes = matched != null ? matched.notes() : routineExercise.notes();
+
+            KeyHolder keyHolder = new GeneratedKeyHolder();
+            jdbcClient.sql("INSERT INTO session_exercises (session_id, exercise_id, order_index, notes) " +
+                            "VALUES (:sessionId, :exerciseId, :orderIndex, :notes)")
+                      .param("sessionId", newSessionId)
+                      .param("exerciseId", routineExercise.exerciseId())
+                      .param("orderIndex", routineExercise.orderIndex())
+                      .param("notes", exerciseNotes)
+                      .update(keyHolder);
+            Long newSessionExerciseId = Objects.requireNonNull(keyHolder.getKey()).longValue();
+
+            // Sets de referencia de la rutina — definen la estructura de sets de la sesión.
+            List<SetCopyRow> routineSets =
+                    jdbcClient.sql("SELECT set_number, weight, reps, notes " +
+                                   "FROM routine_sets " +
+                                   "WHERE routine_exercise_id = :routineExerciseId")
+                              .param("routineExerciseId", routineExercise.id())
+                              .query(SetCopyRow.class)
+                              .list();
+
+            Map<Integer, SetCopyRow> lastSets = matched != null
+                    ? lastSetsByExerciseRow.get(matched.id())
+                    : null;
+
+            for (SetCopyRow routineSet : routineSets) {
+                // El set_number lo define la rutina; weight/reps/notes vienen de la última
+                // sesión si existe ese set_number, si no de los valores de referencia.
+                SetCopyRow source = (lastSets != null && lastSets.containsKey(routineSet.setNumber()))
+                        ? lastSets.get(routineSet.setNumber())
+                        : routineSet;
                 jdbcClient.sql("INSERT INTO sets (session_exercise_id, set_number, weight, reps, notes) " +
                                "VALUES (:sessionExerciseId, :setNumber, :weight, :reps, :notes)")
                           .param("sessionExerciseId", newSessionExerciseId)
-                          .param("setNumber", set.setNumber())
-                          .param("weight", set.weight())
-                          .param("reps", set.reps())
-                          .param("notes", set.notes())
+                          .param("setNumber", routineSet.setNumber())
+                          .param("weight", source.weight())
+                          .param("reps", source.reps())
+                          .param("notes", source.notes())
                           .update();
             }
         }

@@ -78,11 +78,17 @@ public class TrainingSessionController {
 
     /**
      * Crea una nueva sesión ejecutando una rutina existente.
-     * El punto de partida de ejercicios y sets es la última sesión del usuario
-     * para la misma rutina y el mismo gimnasio, si existe; de lo contrario,
-     * se copian desde la plantilla de la rutina. Las notas de la sesión creada
-     * se heredan de esa misma fuente — de la última sesión si existe, o de la
-     * plantilla de la rutina en caso contrario — por lo que no se reciben en el body.
+     * La estructura de ejercicios y sets proviene siempre de la rutina actual
+     * (qué ejercicios, en qué orden y cuántos sets). Si el usuario ya entrenó
+     * esta rutina en el mismo gimnasio, sobre esa estructura se sobreescriben
+     * peso y reps con los valores reales de la última sesión para los ejercicios
+     * y sets que ya existían; los ejercicios de la rutina que no estaban en la
+     * última sesión usan sus valores de referencia, y los que ya no están en la
+     * rutina se descartan. Si es la primera vez en ese gimnasio, se copian los
+     * valores de referencia de la plantilla de la rutina.
+     * Las notas de la sesión creada se heredan de la última sesión si existe, o
+     * de la plantilla de la rutina en caso contrario — por lo que no se reciben
+     * en el body.
      *
      * @param request body con routineId obligatorio y gymId opcional
      * @return 201 Created con el detalle completo de la sesión creada
