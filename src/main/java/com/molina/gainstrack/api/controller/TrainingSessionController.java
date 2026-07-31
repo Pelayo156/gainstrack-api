@@ -142,11 +142,11 @@ public class TrainingSessionController {
      *
      * @param id      id de la sesión
      * @param request body con exerciseId y orderIndex
-     * @return 201 Created con la sesión actualizada
+     * @return 201 Created con el ejercicio agregado a la sesión
      */
     @PostMapping("/{id}/exercises")
-    public ResponseEntity<TrainingSessionDetailResponse> saveExercise(@PathVariable("id") Long id,
-                                                                      @Valid @RequestBody TrainingSessionExerciseRequest request) {
+    public ResponseEntity<TrainingSessionExerciseResponse> saveExercise(@PathVariable("id") Long id,
+                                                                        @Valid @RequestBody TrainingSessionExerciseRequest request) {
         return ResponseEntity.status(201).body(this.trainingSessionService.saveExercise(id,
                                                                                         request));
     }
@@ -185,12 +185,12 @@ public class TrainingSessionController {
     }
 
     /**
-     * Agrega un set vacío a un ejercicio de una sesión del usuario autenticado.
-     * El set se crea con peso 0 y reps 0 para ser editado con los valores reales.
+     * Agrega un set a un ejercicio de una sesión del usuario autenticado.
+     * weight, reps y notes se insertan con el valor recibido en el body.
      *
      * @param id                id de la sesión
      * @param sessionExerciseId id del registro en session_exercises al que agregar el set
-     * @param request           body con setNumber
+     * @param request           body con setNumber obligatorio y weight/reps/notes opcionales
      * @return 201 Created con la sesión actualizada
      */
     @PostMapping("/{id}/exercises/{sessionExerciseId}/sets")

@@ -84,7 +84,8 @@ public class RoutineRepository {
                                                     "FROM routine_exercises re " +
                                                     "JOIN exercises e ON re.exercise_id = e.id " +
                                                     "JOIN muscle_groups mg ON e.muscle_group_id = mg.id " +
-                                                    "WHERE re.routine_id = :routineId")
+                                                    "WHERE re.routine_id = :routineId " +
+                                                    "ORDER BY re.order_index ASC")
                                              .param("routineId", id)
                                              .query((rs2, rowNum2) -> {
                                                 List<SetResponse> routineExerciseSets =
@@ -275,31 +276,34 @@ public class RoutineRepository {
     }
 
     /**
-     * Agrega un set vacío a un ejercicio de una rutina.
-     * El set se crea con peso 0 y reps 0 — se editan posteriormente
-     * con los valores reales del entrenamiento.
+     * Agrega un set a un ejercicio de una rutina.
+     * weight, reps y notes son opcionales — se insertan con el valor
+     * recibido en el request, incluyendo null si el usuario aún no los conoce.
      * Retorna el detalle completo de la rutina actualizada.
      *
      * @param id                 id de la rutina
      * @param routineExerciseId  id del registro en routine_exercises
      * @param setNumber          número de serie dentro del ejercicio
+     * @param weight             peso en kg — puede ser null
+     * @param reps               repeticiones — puede ser null
+     * @param notes              notas del set — puede ser null
      * @param userId             id del usuario propietario
      * @return RoutineDetailResponse con la rutina actualizada
      */
     public RoutineDetailResponse saveExerciseSet(Long id,
                                                  Long routineExerciseId,
                                                  Integer setNumber,
-                                                 Double setWeight,
-                                                 Integer setReps,
-                                                 String setNotes,
+                                                 Double weight,
+                                                 Integer reps,
+                                                 String notes,
                                                  Long userId) {
         this.jdbcClient.sql("INSERT INTO routine_sets (routine_exercise_id, set_number, weight, reps, notes) " +
-                            "VALUES (:routineExerciseId, :setNumber, :setWeight, :setReps, :setNotes)")
+                            "VALUES (:routineExerciseId, :setNumber, :weight, :reps, :notes)")
                        .param("routineExerciseId", routineExerciseId)
                        .param("setNumber", setNumber)
-                       .param("setWeight", setWeight)
-                       .param("setReps", setReps)
-                       .param("setNotes", setNotes)
+                       .param("weight", weight)
+                       .param("reps", reps)
+                       .param("notes", notes)
                        .update();
 
         return this.findById(id,
@@ -376,16 +380,18 @@ public class RoutineRepository {
 
     /**
      * Actualiza los datos de un set de un ejercicio de una rutina.
-     * Usa COALESCE para actualizar solo los campos enviados.
+     * setNumber usa COALESCE y se preserva si no se envía. weight, reps y
+     * notes se sobrescriben directamente con el valor recibido — enviar
+     * null los deja vacíos intencionalmente.
      * Retorna el detalle completo de la rutina actualizada.
      *
      * @param id                id de la rutina
      * @param setId             id del set a actualizar
      * @param routineExerciseId id del registro en routine_exercises
-     * @param setNumber         nuevo número de serie — puede ser null
-     * @param weight            nuevo peso en kg — puede ser null
-     * @param reps              nuevas repeticiones — puede ser null
-     * @param notes             nuevas notas — puede ser null
+     * @param setNumber         nuevo número de serie — null preserva el actual
+     * @param weight            nuevo peso en kg — null lo deja sin definir
+     * @param reps              nuevas repeticiones — null las deja sin definir
+     * @param notes             nuevas notas — null las deja sin definir
      * @param userId            id del usuario propietario
      * @return RoutineDetailResponse con la rutina actualizada
      */

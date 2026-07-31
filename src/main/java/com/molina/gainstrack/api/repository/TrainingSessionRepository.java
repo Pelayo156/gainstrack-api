@@ -632,26 +632,32 @@ public class TrainingSessionRepository {
     /**
      * Agrega un ejercicio a una sesión de entrenamiento.
      * El ejercicio se inserta con notas nulas — se editan posteriormente.
-     * Retorna el detalle completo de la sesión actualizada.
      *
      * @param id         id de la sesión
      * @param exerciseId id del ejercicio del catálogo a agregar
      * @param orderIndex posición del ejercicio dentro de la sesión
      * @param userId     id del usuario propietario
-     * @return TrainingSessionDetailResponse con la sesión actualizada
+     * @return TrainingSessionExerciseResponse con el ejercicio agregado
      */
-    public TrainingSessionDetailResponse saveExercise(Long id,
-                                                      Long exerciseId,
-                                                      Integer orderIndex,
-                                                      Long userId) {
+    public TrainingSessionExerciseResponse saveExercise(Long id,
+                                                        Long exerciseId,
+                                                        Integer orderIndex,
+                                                        Long userId) {
+        KeyHolder keyHolder = new GeneratedKeyHolder();
         this.jdbcClient.sql("INSERT INTO session_exercises (session_id, exercise_id, order_index, notes) " +
                             "VALUES (:id, :exerciseId, :orderIndex, NULL)")
                        .param("id", id)
                        .param("exerciseId", exerciseId)
                        .param("orderIndex", orderIndex)
-                       .update();
+                       .update(keyHolder);
+        Long sessionExerciseId = Objects.requireNonNull(keyHolder.getKey()).longValue();
+        TrainingSessionDetailResponse sessionDetailResponse = this.findById(id, userId);
 
-        return this.findById(id, userId);
+        return sessionDetailResponse.exercises()
+                                    .stream()
+                                    .filter(se -> se.id().equals(sessionExerciseId))
+                                    .findFirst()
+                                    .orElseThrow(() -> new NotFoundException("Ejercicio no encontrado"));
     }
 
     /**
@@ -726,25 +732,34 @@ public class TrainingSessionRepository {
     }
 
     /**
-     * Agrega un set vacío a un ejercicio de una sesión.
-     * El set se crea con peso 0 y reps 0 para ser editado
-     * con los valores reales del entrenamiento.
+     * Agrega un set a un ejercicio de una sesión.
+     * weight, reps y notes son opcionales — se insertan con el valor
+     * recibido en el request, incluyendo null si el usuario aún no los conoce.
      * Retorna el detalle completo de la sesión actualizada.
      *
      * @param id                id de la sesión
      * @param sessionExerciseId id del registro en session_exercises
      * @param setNumber         número de serie dentro del ejercicio
+     * @param weight            peso en kg — puede ser null
+     * @param reps              repeticiones — puede ser null
+     * @param notes             notas del set — puede ser null
      * @param userId            id del usuario propietario
      * @return TrainingSessionDetailResponse con la sesión actualizada
      */
     public TrainingSessionDetailResponse saveExerciseSet(Long id,
                                                          Long sessionExerciseId,
                                                          Integer setNumber,
+                                                         Double weight,
+                                                         Integer reps,
+                                                         String notes,
                                                          Long userId) {
         this.jdbcClient.sql("INSERT INTO sets (session_exercise_id, set_number, weight, reps, notes) " +
-                            "VALUES (:sessionExerciseId, :setNumber, 0, 0, NULL)")
+                            "VALUES (:sessionExerciseId, :setNumber, :weight, :reps, :notes)")
                 .param("sessionExerciseId", sessionExerciseId)
                 .param("setNumber", setNumber)
+                .param("weight", weight)
+                .param("reps", reps)
+                .param("notes", notes)
                 .update();
 
         return this.findById(id,
@@ -783,16 +798,18 @@ public class TrainingSessionRepository {
 
     /**
      * Actualiza los datos de un set de un ejercicio de una sesión.
-     * Usa COALESCE para actualizar solo los campos enviados.
+     * setNumber usa COALESCE y se preserva si no se envía. weight, reps y
+     * notes se sobrescriben directamente con el valor recibido — enviar
+     * null los deja vacíos intencionalmente.
      * Retorna el detalle completo de la sesión actualizada.
      *
      * @param id                id de la sesión
      * @param setId             id del set a actualizar
      * @param sessionExerciseId id del registro en session_exercises
-     * @param setNumber         nuevo número de serie — puede ser null
-     * @param weight            nuevo peso en kg — puede ser null
-     * @param reps              nuevas repeticiones — puede ser null
-     * @param notes             nuevas notas — puede ser null
+     * @param setNumber         nuevo número de serie — null preserva el actual
+     * @param weight            nuevo peso en kg — null lo deja sin definir
+     * @param reps              nuevas repeticiones — null las deja sin definir
+     * @param notes             nuevas notas — null las deja sin definir
      * @param userId            id del usuario propietario
      * @return TrainingSessionDetailResponse con la sesión actualizada
      * @throws NotFoundException si el set no existe para el ejercicio especificado
@@ -807,9 +824,9 @@ public class TrainingSessionRepository {
                                                            Long userId) {
         int affectedRows = this.jdbcClient.sql("UPDATE sets " +
                                                "SET set_number = COALESCE(:setNumber, set_number), " +
-                                                   "weight = COALESCE(:weight, weight), " +
-                                                   "reps = COALESCE(:reps, reps), " +
-                                                   "notes = COALESCE(:notes, notes) " +
+                                                   "weight = :weight, " +
+                                                   "reps = :reps, " +
+                                                   "notes = :notes " +
                                                "WHERE id = :setId " +
                                                "AND session_exercise_id = :sessionExerciseId")
                                           .param("setNumber", setNumber)

@@ -155,24 +155,24 @@ public class TrainingSessionService {
      *
      * @param id      id de la sesión
      * @param request datos del ejercicio a agregar — exerciseId y orderIndex
-     * @return TrainingSessionDetailResponse con la sesión actualizada
+     * @return TrainingSessionExerciseResponse con el ejercicio agregado
      * @throws NotFoundException si el ejercicio no existe en el catálogo
      */
     @Transactional
-    public TrainingSessionDetailResponse saveExercise(Long id,
-                                                      TrainingSessionExerciseRequest request) {
+    public TrainingSessionExerciseResponse saveExercise(Long id,
+                                                        TrainingSessionExerciseRequest request) {
         User user = this.authUtils.getAuthenticatedUser();
 
         if (!exerciseRepository.existsById(request.exerciseId()))
             throw new NotFoundException("Ejercicio no encontrado");
 
-        TrainingSessionDetailResponse session = this.trainingSessionRepository.saveExercise(id,
-                                                                                            request.exerciseId(),
-                                                                                            request.orderIndex(),
-                                                                                            user.getId());
+        TrainingSessionExerciseResponse sessionExercise = this.trainingSessionRepository.saveExercise(id,
+                                                                                                       request.exerciseId(),
+                                                                                                       request.orderIndex(),
+                                                                                                       user.getId());
         LOG.info("Ejercicio agregado a sesión — sessionId: {}, exerciseId: {}",
                  id, request.exerciseId());
-        return session;
+        return sessionExercise;
     }
 
     /**
@@ -249,13 +249,13 @@ public class TrainingSessionService {
     }
 
     /**
-     * Agrega un set vacío a un ejercicio de una sesión del usuario autenticado.
+     * Agrega un set a un ejercicio de una sesión del usuario autenticado.
      * Valida que el sessionExerciseId pertenezca a la sesión antes de insertar.
-     * El set se crea con peso 0 y reps 0 para ser editado con los valores reales.
+     * weight, reps y notes se insertan con el valor recibido en el request.
      *
      * @param id                id de la sesión
      * @param sessionExerciseId id del registro en session_exercises al que agregar el set
-     * @param request           datos del set — solo setNumber obligatorio
+     * @param request           datos del set — setNumber obligatorio, weight/reps/notes opcionales
      * @return TrainingSessionDetailResponse con la sesión actualizada
      * @throws NotFoundException si el sessionExerciseId no pertenece a la sesión
      */
@@ -277,11 +277,17 @@ public class TrainingSessionService {
         TrainingSessionDetailResponse updated = this.trainingSessionRepository.saveExerciseSet(id,
                                                                                                sessionExerciseId,
                                                                                                request.setNumber(),
+                                                                                               request.weight(),
+                                                                                               request.reps(),
+                                                                                               request.notes(),
                                                                                                user.getId());
-        LOG.info("Set agregado — sessionId: {}, sessionExerciseId: {}, setNumber: {}",
+        LOG.info("Set agregado — sessionId: {}, sessionExerciseId: {}, setNumber: {}, weight: {}, reps: {}, notes: {}",
                  id,
                  sessionExerciseId,
-                 request.setNumber());
+                 request.setNumber(),
+                 request.weight(),
+                 request.reps(),
+                 request.notes());
         return updated;
     }
 

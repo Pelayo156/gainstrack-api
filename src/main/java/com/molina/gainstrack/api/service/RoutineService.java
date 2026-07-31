@@ -135,7 +135,7 @@ public class RoutineService {
      *
      * @param id      id de la rutina
      * @param request datos del ejercicio a agregar — exerciseId y orderIndex
-     * @return RoutineDetailResponse con la rutina actualizada
+     * @return RoutineExerciseResponse con el ejercicio agregado
      * @throws NotFoundException si el ejercicio no existe en el catálogo
      */
     @Transactional
@@ -189,13 +189,13 @@ public class RoutineService {
     }
 
     /**
-     * Agrega un set vacío a un ejercicio de una rutina del usuario autenticado.
+     * Agrega un set a un ejercicio de una rutina del usuario autenticado.
      * Valida que el routineExerciseId pertenezca a la rutina antes de insertar.
-     * El set se crea con peso 0 y reps 0 para ser editado posteriormente.
+     * weight, reps y notes se insertan con el valor recibido en el request.
      *
      * @param id                id de la rutina
      * @param routineExerciseId id del registro en routine_exercises al que agregar el set
-     * @param request           datos del set — solo setNumber obligatorio
+     * @param request           datos del set — setNumber obligatorio, weight/reps/notes opcionales
      * @return RoutineDetailResponse con la rutina actualizada
      * @throws NotFoundException si el routineExerciseId no pertenece a la rutina
      */
@@ -221,7 +221,7 @@ public class RoutineService {
                                                                                request.reps(),
                                                                                request.notes(),
                                                                                user.getId());
-        LOG.info("Set agregado a rutina — routineId: {}, routineExerciseId: {}, setNumber: {}, setWeight: {}, setReps: {}, setNotes: {}",
+        LOG.info("Set agregado a rutina — routineId: {}, routineExerciseId: {}, setNumber: {}, weight: {}, reps: {}, notes: {}",
                  id,
                  routineExerciseId,
                  request.setNumber(),

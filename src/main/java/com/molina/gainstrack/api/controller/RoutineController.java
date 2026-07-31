@@ -94,7 +94,7 @@ public class RoutineController {
      *
      * @param id      id de la rutina
      * @param request body con exerciseId y orderIndex
-     * @return 201 Created con la rutina actualizada
+     * @return 201 Created con el ejercicio agregado a la rutina
      */
     @PostMapping("/{id}/exercises")
     public ResponseEntity<RoutineExerciseResponse> saveExercise(@PathVariable("id") Long id,
@@ -119,12 +119,12 @@ public class RoutineController {
     }
 
     /**
-     * Agrega un set vacío a un ejercicio de una rutina del usuario autenticado.
-     * El set se crea con peso 0 y reps 0 para ser editado posteriormente.
+     * Agrega un set a un ejercicio de una rutina del usuario autenticado.
+     * weight, reps y notes se insertan con el valor recibido en el body.
      *
      * @param id                id de la rutina
      * @param routineExerciseId id del registro en routine_exercises al que agregar el set
-     * @param request           body con setNumber
+     * @param request           body con setNumber obligatorio y weight/reps/notes opcionales
      * @return 201 Created con la rutina actualizada
      */
     @PostMapping("/{id}/exercises/{routineExerciseId}/sets")
