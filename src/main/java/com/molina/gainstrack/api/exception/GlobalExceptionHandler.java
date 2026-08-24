@@ -108,6 +108,8 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ErrorResponse> handlerDataIntegrityViolationException(DataIntegrityViolationException dataIntegrityViolationException) {
+        LOG.error("Violación de integridad de datos: ", dataIntegrityViolationException);
+
         HttpStatus status = HttpStatus.CONFLICT;
         String message = "Error de integridad de datos — verifique la información enviada";
 
@@ -123,6 +125,8 @@ public class GlobalExceptionHandler {
             message = "Rutina no encontrada - verifique la información enviada";
         } else if (dataIntegrityViolationException.getMessage().contains("training_sessions.fk_ts_gym")) {
             message = "Gimnasio no encontrado - verifique la información enviada";
+        } else if (dataIntegrityViolationException.getMessage().contains("session_exercises.fk_se_exercise")) {
+            message = "Ejercicio no encontrado - verifique la información enviada";
         }
 
         return ResponseEntity.status(status).body(new ErrorResponse(status.value(),

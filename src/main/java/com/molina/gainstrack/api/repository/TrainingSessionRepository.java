@@ -11,6 +11,7 @@ import org.springframework.jdbc.support.KeyHolder;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -162,8 +163,9 @@ public class TrainingSessionRepository {
     }
 
     /**
-     * Crea una nueva sesión de entrenamiento ejecutando una rutina existente.
-     * El punto de partida de los ejercicios, sets y notas depende del historial del usuario:
+     * Simula cómo quedaría una nueva sesión de entrenamiento ejecutando una rutina
+     * existente, sin persistir nada en la base de datos. El punto de partida de
+     * los ejercicios, sets y notas depende del historial del usuario:
      * - Si existe una sesión previa del usuario para la misma rutina y el mismo
      *   gimnasio (gymId null incluido, representando "sin gimnasio"/sesión libre),
      *   se hace un merge dirigido por la rutina actual: la estructura (qué ejercicios,
@@ -171,46 +173,55 @@ public class TrainingSessionRepository {
      *   peso/reps con los valores reales de la última sesión en ese gimnasio para los
      *   ejercicios y sets que ya existían. Los ejercicios de la rutina que no estaban en
      *   la última sesión usan sus valores de referencia; los que ya no están en la rutina
-     *   se descartan. Ver {@link #copyMergingRoutineAndLastSession}.
+     *   se descartan. Ver {@link #buildExercisesMergingRoutineAndLastSession}.
      * - Si es la primera vez que el usuario entrena esta rutina en ese gimnasio,
      *   se copian los ejercicios, sets y notas de referencia de la plantilla de la rutina.
-     * La búsqueda de la última sesión se hace antes del INSERT para poder heredar
-     * sus notas en el momento de creación. La fecha se asigna automáticamente con
-     * NOW() en MySQL. Delega a findById para retornar el detalle completo de la
-     * sesión creada.
+     * Pensado para que el cliente use esta respuesta como punto de partida editable
+     * durante el entrenamiento y recién al terminar envíe el resultado final a save() —
+     * evita dejar sesiones huérfanas cuando el usuario abandona antes de terminar.
+     * El id de la sesión retornada es siempre null, ya que no representa un registro real.
      *
      * @param userId    id del usuario autenticado
-     * @param gymId     id del gimnasio donde se realiza la sesión — puede ser null
-     * @param routineId id de la rutina a ejecutar — obligatorio
-     * @return TrainingSessionDetailResponse con la sesión completa incluyendo
-     *         ejercicios y sets resultantes del merge, o copiados de la plantilla
+     * @param routineId id de la rutina a simular — obligatorio
+     * @param gymId     id del gimnasio — puede ser null
+     * @return TrainingSessionDetailResponse simulado, con id null, sin persistir nada
+     * @throws NotFoundException si gymId no existe o no pertenece al usuario autenticado
      */
-    @Transactional
-    public TrainingSessionDetailResponse save(Long userId, Long gymId, Long routineId) {
-
+    public TrainingSessionDetailResponse preview(Long userId, Long routineId, Long gymId) {
+        GymResponse gym = this.resolveGym(gymId, userId);
         Long lastSessionId = this.findLastSessionId(userId, routineId, gymId);
         String notes = lastSessionId != null
                 ? this.findSessionNotes(lastSessionId)
                 : this.findRoutineNotes(routineId);
 
-        KeyHolder keyHolder = new GeneratedKeyHolder();
-        this.jdbcClient.sql("INSERT INTO training_sessions (user_id, routine_id, gym_id, session_date, notes) " +
-                            "VALUES (:userId, :routineId, :gymId, NOW(), :notes)")
-                       .param("userId", userId)
-                       .param("routineId", routineId)
-                       .param("gymId", gymId)
-                       .param("notes", notes)
-                       .update(keyHolder);
-        Long sessionId = Objects.requireNonNull(keyHolder.getKey()).longValue();
+        List<TrainingSessionExerciseResponse> exercises = lastSessionId != null
+                ? this.buildExercisesMergingRoutineAndLastSession(routineId, lastSessionId)
+                : this.buildExercisesFromRoutineTemplate(routineId);
 
-        if (lastSessionId != null) {
-            this.copyMergingRoutineAndLastSession(sessionId, routineId, lastSessionId);
-        } else {
-            this.copyFromRoutineTemplate(sessionId, routineId);
+        return new TrainingSessionDetailResponse(null, gym, LocalDate.now(), notes, exercises);
+    }
+
+    /**
+     * Resuelve el gimnasio de una sesión simulada a partir de su id, validando
+     * que pertenezca al usuario autenticado.
+     * gymId puede ser null — representa una sesión sin gimnasio asociado
+     * (sesión libre de gimnasio), en cuyo caso no se ejecuta ninguna consulta.
+     *
+     * @param gymId  id del gimnasio — null representa sin gimnasio
+     * @param userId id del usuario propietario — previene resolver gimnasios ajenos
+     * @return GymResponse con los datos del gimnasio, o el placeholder "No especificado" si gymId es null
+     * @throws NotFoundException si gymId no existe o no pertenece al usuario
+     */
+    private GymResponse resolveGym(Long gymId, Long userId) {
+        if (gymId == null) {
+            return new GymResponse(null, "No especificado");
         }
-
-        // Query 1: Datos sesión recién creada
-        return this.findById(sessionId, userId);
+        return this.jdbcClient.sql("SELECT id, name FROM gyms WHERE id = :gymId AND user_id = :userId")
+                              .param("gymId", gymId)
+                              .param("userId", userId)
+                              .query(GymResponse.class)
+                              .optional()
+                              .orElseThrow(() -> new NotFoundException("Gimnasio no encontrado"));
     }
 
     /**
@@ -270,9 +281,9 @@ public class TrainingSessionRepository {
     }
 
     /**
-     * Construye los ejercicios y sets de la sesión recién creada mezclando la
+     * Construye en memoria los ejercicios y sets de la sesión simulada mezclando la
      * estructura de la rutina actual con los pesos/reps reales de la última sesión
-     * del usuario para esa rutina en ese gimnasio.
+     * del usuario para esa rutina en ese gimnasio. No persiste nada.
      *
      * La rutina actual es la fuente de verdad de la estructura: qué ejercicios,
      * en qué orden (order_index) y cuántos sets (por set_number). Sobre esa
@@ -291,11 +302,12 @@ public class TrainingSessionRepository {
      * la N-ésima aparición del ejercicio en la rutina se empareja con la N-ésima
      * de la última sesión.
      *
-     * @param newSessionId  id de la sesión recién creada
-     * @param routineId     id de la rutina cuya estructura se ejecuta
+     * @param routineId     id de la rutina cuya estructura se simula
      * @param lastSessionId id de la última sesión del usuario para la misma rutina y gimnasio
+     * @return ejercicios simulados, con id null en cada ejercicio y set
      */
-    private void copyMergingRoutineAndLastSession(Long newSessionId, Long routineId, Long lastSessionId) {
+    private List<TrainingSessionExerciseResponse> buildExercisesMergingRoutineAndLastSession(Long routineId,
+                                                                                              Long lastSessionId) {
         // Ejercicios de la última sesión agrupados por exercise_id, en orden de aparición,
         // para emparejar por ocurrencia cuando un mismo ejercicio se repite.
         List<ExerciseCopyRow> lastSessionExercises =
@@ -342,6 +354,7 @@ public class TrainingSessionRepository {
 
         // Contador de ocurrencias por exercise_id para el emparejamiento posicional.
         Map<Long, Integer> occurrenceByExerciseId = new HashMap<>();
+        List<TrainingSessionExerciseResponse> exercises = new ArrayList<>();
 
         for (ExerciseCopyRow routineExercise : routineExercises) {
             int occurrence = occurrenceByExerciseId.merge(routineExercise.exerciseId(), 1, Integer::sum) - 1;
@@ -351,16 +364,6 @@ public class TrainingSessionRepository {
                     : null;
 
             String exerciseNotes = matched != null ? matched.notes() : routineExercise.notes();
-
-            KeyHolder keyHolder = new GeneratedKeyHolder();
-            jdbcClient.sql("INSERT INTO session_exercises (session_id, exercise_id, order_index, notes) " +
-                            "VALUES (:sessionId, :exerciseId, :orderIndex, :notes)")
-                      .param("sessionId", newSessionId)
-                      .param("exerciseId", routineExercise.exerciseId())
-                      .param("orderIndex", routineExercise.orderIndex())
-                      .param("notes", exerciseNotes)
-                      .update(keyHolder);
-            Long newSessionExerciseId = Objects.requireNonNull(keyHolder.getKey()).longValue();
 
             // Sets de referencia de la rutina — definen la estructura de sets de la sesión.
             List<SetCopyRow> routineSets =
@@ -375,33 +378,67 @@ public class TrainingSessionRepository {
                     ? lastSetsByExerciseRow.get(matched.id())
                     : null;
 
+            List<SetResponse> sets = new ArrayList<>();
             for (SetCopyRow routineSet : routineSets) {
                 // El set_number lo define la rutina; weight/reps/notes vienen de la última
                 // sesión si existe ese set_number, si no de los valores de referencia.
                 SetCopyRow source = (lastSets != null && lastSets.containsKey(routineSet.setNumber()))
                         ? lastSets.get(routineSet.setNumber())
                         : routineSet;
-                jdbcClient.sql("INSERT INTO sets (session_exercise_id, set_number, weight, reps, notes) " +
-                               "VALUES (:sessionExerciseId, :setNumber, :weight, :reps, :notes)")
-                          .param("sessionExerciseId", newSessionExerciseId)
-                          .param("setNumber", routineSet.setNumber())
-                          .param("weight", source.weight())
-                          .param("reps", source.reps())
-                          .param("notes", source.notes())
-                          .update();
+                sets.add(new SetResponse(null, routineSet.setNumber(), source.weight(), source.reps(), source.notes()));
             }
+
+            exercises.add(new TrainingSessionExerciseResponse(null,
+                                                               routineExercise.orderIndex(),
+                                                               exerciseNotes,
+                                                               this.findExerciseCatalogData(routineExercise.exerciseId()),
+                                                               sets));
         }
+
+        return exercises;
     }
 
     /**
-     * Copia ejercicios y sets desde la plantilla de la rutina hacia la sesión recién creada.
-     * Se usa cuando el usuario entrena esta rutina por primera vez en el gimnasio elegido
-     * y no existe una sesión previa de la cual partir.
+     * Retorna los datos de catálogo de un ejercicio (nombre, grupo muscular, etc.)
+     * a partir de su id. Se usa para completar cada ejercicio de la sesión simulada,
+     * ya que la estructura de la rutina/última sesión solo carga el exercise_id.
      *
-     * @param newSessionId id de la sesión recién creada
-     * @param routineId    id de la rutina cuya plantilla se copia
+     * @param exerciseId id del ejercicio del catálogo
+     * @return ExerciseResponse con los datos completos del ejercicio
+     * @throws NotFoundException si el ejercicio no existe
      */
-    private void copyFromRoutineTemplate(Long newSessionId, Long routineId) {
+    private ExerciseResponse findExerciseCatalogData(Long exerciseId) {
+        return this.jdbcClient.sql("SELECT e.id AS exercise_id, e.name AS exercise_name, " +
+                                   "mg.id AS muscle_group_id, mg.name AS muscle_group_name, " +
+                                   "e.user_id AS exercise_user_id, e.is_predefined AS exercise_is_predefined " +
+                                   "FROM exercises e " +
+                                   "JOIN muscle_groups mg ON e.muscle_group_id = mg.id " +
+                                   "WHERE e.id = :exerciseId")
+                              .param("exerciseId", exerciseId)
+                              .query((rs, rowNum) -> new ExerciseResponse(
+                                      rs.getLong("exercise_id"),
+                                      rs.getString("exercise_name"),
+                                      new MuscleGroupResponse(
+                                              rs.getLong("muscle_group_id"),
+                                              rs.getString("muscle_group_name")
+                                      ),
+                                      rs.getLong("exercise_user_id"),
+                                      rs.getBoolean("exercise_is_predefined")
+                              ))
+                              .optional()
+                              .orElseThrow(() -> new NotFoundException("Ejercicio no encontrado"));
+    }
+
+    /**
+     * Construye en memoria los ejercicios y sets simulados copiando los valores
+     * de referencia de la plantilla de la rutina. Se usa cuando el usuario va a
+     * entrenar esta rutina por primera vez en el gimnasio elegido y no existe una
+     * sesión previa de la cual partir. No persiste nada.
+     *
+     * @param routineId id de la rutina cuya plantilla se copia
+     * @return ejercicios simulados, con id null en cada ejercicio y set
+     */
+    private List<TrainingSessionExerciseResponse> buildExercisesFromRoutineTemplate(Long routineId) {
         List<ExerciseCopyRow> routineExercises =
                 jdbcClient.sql("SELECT id, exercise_id, order_index, notes " +
                                "FROM routine_exercises " +
@@ -410,17 +447,9 @@ public class TrainingSessionRepository {
                           .query(ExerciseCopyRow.class)
                           .list();
 
-        for (ExerciseCopyRow routineExercise : routineExercises) {
-            KeyHolder keyHolder = new GeneratedKeyHolder();
-            jdbcClient.sql("INSERT INTO session_exercises (session_id, exercise_id, order_index, notes) " +
-                            "VALUES (:sessionId, :exerciseId, :orderIndex, :notes)")
-                      .param("sessionId", newSessionId)
-                      .param("exerciseId", routineExercise.exerciseId())
-                      .param("orderIndex", routineExercise.orderIndex())
-                      .param("notes", routineExercise.notes())
-                      .update(keyHolder);
-            Long sessionExerciseId = Objects.requireNonNull(keyHolder.getKey()).longValue();
+        List<TrainingSessionExerciseResponse> exercises = new ArrayList<>();
 
+        for (ExerciseCopyRow routineExercise : routineExercises) {
             List<SetCopyRow> routineExerciseSets =
                     jdbcClient.sql("SELECT set_number, weight, reps, notes " +
                                    "FROM routine_sets " +
@@ -429,17 +458,74 @@ public class TrainingSessionRepository {
                               .query(SetCopyRow.class)
                               .list();
 
+            List<SetResponse> sets = new ArrayList<>();
             for (SetCopyRow set : routineExerciseSets) {
-                jdbcClient.sql("INSERT INTO sets (session_exercise_id, set_number, weight, reps, notes) " +
-                               "VALUES (:sessionExerciseId, :setNumber, :weight, :reps, :notes)")
-                          .param("sessionExerciseId", sessionExerciseId)
-                          .param("setNumber", set.setNumber())
-                          .param("weight", set.weight())
-                          .param("reps", set.reps())
-                          .param("notes", set.notes())
-                          .update();
+                sets.add(new SetResponse(null, set.setNumber(), set.weight(), set.reps(), set.notes()));
+            }
+
+            exercises.add(new TrainingSessionExerciseResponse(null,
+                                                               routineExercise.orderIndex(),
+                                                               routineExercise.notes(),
+                                                               this.findExerciseCatalogData(routineExercise.exerciseId()),
+                                                               sets));
+        }
+
+        return exercises;
+    }
+
+    /**
+     * Crea una nueva sesión de entrenamiento persistiendo exactamente lo recibido —
+     * rutina, gimnasio, notas, ejercicios y sets ya decididos por el cliente,
+     * típicamente a partir de lo que devolvió preview() y editado por el usuario
+     * durante el entrenamiento. No aplica ninguna fusión ni copia: inserta la
+     * sesión, luego cada ejercicio, luego cada set de cada ejercicio, en ese orden.
+     * Delega a findById para retornar el detalle completo de la sesión creada.
+     *
+     * @param userId    id del usuario autenticado
+     * @param routineId id de la rutina ejecutada — obligatorio
+     * @param gymId     id del gimnasio donde se realiza la sesión — puede ser null
+     * @param notes     notas de la sesión — puede ser null
+     * @param exercises ejercicios de la sesión con sus sets, ya definidos por el cliente
+     * @return TrainingSessionDetailResponse con la sesión completa tal como fue recibida
+     */
+    @Transactional
+    public TrainingSessionDetailResponse save(Long userId, Long routineId, Long gymId, String notes,
+                                              List<SessionExerciseRequest> exercises) {
+        KeyHolder keyHolder = new GeneratedKeyHolder();
+        this.jdbcClient.sql("INSERT INTO training_sessions (user_id, routine_id, gym_id, session_date, notes) " +
+                            "VALUES (:userId, :routineId, :gymId, NOW(), :notes)")
+                       .param("userId", userId)
+                       .param("routineId", routineId)
+                       .param("gymId", gymId)
+                       .param("notes", notes)
+                       .update(keyHolder);
+        Long sessionId = Objects.requireNonNull(keyHolder.getKey()).longValue();
+
+        for (SessionExerciseRequest exercise : exercises) {
+            KeyHolder exerciseKeyHolder = new GeneratedKeyHolder();
+            this.jdbcClient.sql("INSERT INTO session_exercises (session_id, exercise_id, order_index, notes) " +
+                                "VALUES (:sessionId, :exerciseId, :orderIndex, :notes)")
+                           .param("sessionId", sessionId)
+                           .param("exerciseId", exercise.exerciseId())
+                           .param("orderIndex", exercise.orderIndex())
+                           .param("notes", exercise.notes())
+                           .update(exerciseKeyHolder);
+            Long sessionExerciseId = Objects.requireNonNull(exerciseKeyHolder.getKey()).longValue();
+
+            List<SessionSetRequest> sets = exercise.sets() != null ? exercise.sets() : List.of();
+            for (SessionSetRequest set : sets) {
+                this.jdbcClient.sql("INSERT INTO sets (session_exercise_id, set_number, weight, reps, notes) " +
+                                    "VALUES (:sessionExerciseId, :setNumber, :weight, :reps, :notes)")
+                               .param("sessionExerciseId", sessionExerciseId)
+                               .param("setNumber", set.setNumber())
+                               .param("weight", set.weight())
+                               .param("reps", set.reps())
+                               .param("notes", set.notes())
+                               .update();
             }
         }
+
+        return this.findById(sessionId, userId);
     }
 
     /**

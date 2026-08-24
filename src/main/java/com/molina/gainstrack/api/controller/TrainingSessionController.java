@@ -77,20 +77,33 @@ public class TrainingSessionController {
     }
 
     /**
-     * Crea una nueva sesión ejecutando una rutina existente.
-     * La estructura de ejercicios y sets proviene siempre de la rutina actual
-     * (qué ejercicios, en qué orden y cuántos sets). Si el usuario ya entrenó
-     * esta rutina en el mismo gimnasio, sobre esa estructura se sobreescriben
-     * peso y reps con los valores reales de la última sesión para los ejercicios
-     * y sets que ya existían; los ejercicios de la rutina que no estaban en la
-     * última sesión usan sus valores de referencia, y los que ya no están en la
-     * rutina se descartan. Si es la primera vez en ese gimnasio, se copian los
-     * valores de referencia de la plantilla de la rutina.
-     * Las notas de la sesión creada se heredan de la última sesión si existe, o
-     * de la plantilla de la rutina en caso contrario — por lo que no se reciben
-     * en el body.
+     * Simula cómo quedaría una nueva sesión antes de crearla, sin persistir nada.
+     * El frontend usa esta respuesta como punto de partida editable: el usuario
+     * la ajusta durante el entrenamiento y recién al terminar envía el resultado
+     * final a POST /sessions. Evita dejar sesiones huérfanas en la base de datos
+     * cuando el usuario abandona el entrenamiento antes de terminarlo.
      *
-     * @param request body con routineId obligatorio y gymId opcional
+     * @param routineId id de la rutina a simular
+     * @param gymId     id del gimnasio — opcional, si se omite se simula una
+     *                  sesión sin gimnasio asociado (sesión libre de gimnasio)
+     * @return 200 OK con el detalle simulado de la sesión — id siempre null
+     */
+    @GetMapping("/preview")
+    public ResponseEntity<TrainingSessionDetailResponse> preview(
+            @RequestParam("routineId") Long routineId,
+            @RequestParam(value = "gymId", required = false) Long gymId) {
+        return ResponseEntity.ok(this.trainingSessionService.preview(routineId, gymId));
+    }
+
+    /**
+     * Crea una nueva sesión de entrenamiento persistiendo exactamente lo recibido
+     * en el body — rutina, gimnasio, notas, ejercicios y sets ya decididos por
+     * el cliente (típicamente a partir de lo devuelto por GET /sessions/preview,
+     * luego editado por el usuario durante el entrenamiento). No aplica fusión ni
+     * copia de ningún tipo.
+     *
+     * @param request body con routineId obligatorio, gymId/notes opcionales y la
+     *                lista de ejercicios con sus sets anidados
      * @return 201 Created con el detalle completo de la sesión creada
      */
    @PostMapping

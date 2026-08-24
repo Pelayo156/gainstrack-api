@@ -52,25 +52,54 @@ public class TrainingSessionService {
     }
 
     /**
-     * Crea una nueva sesión de entrenamiento para el usuario autenticado.
-     * El punto de partida de ejercicios y sets depende del historial del usuario
-     * para la misma rutina y el mismo gimnasio (gymId null incluido, como "sin
-     * gimnasio"/sesión libre): si existe una sesión previa se copian sus ejercicios
-     * y sets reales; si es la primera vez, se copian desde la plantilla de la rutina.
-     * Las notas de la sesión creada se heredan de esa misma fuente — no se reciben
-     * en el request. La fecha se asigna automáticamente como la fecha actual del servidor.
+     * Simula cómo quedaría una nueva sesión de entrenamiento sin persistir nada.
+     * Ejecuta el mismo algoritmo de fusión que antes vivía dentro de save(): si el
+     * usuario ya entrenó esta rutina en el mismo gimnasio, la estructura de
+     * ejercicios y sets viene de la rutina actual pero el peso/reps se sobreescriben
+     * con los de la última sesión real cuando existen; si es la primera vez, se
+     * copian los valores de referencia de la plantilla de la rutina. Pensado para
+     * que el frontend construya el body de save() a partir de esta respuesta y lo
+     * edite libremente durante el entrenamiento antes de guardarlo — evita dejar
+     * sesiones huérfanas cuando el usuario abandona el entrenamiento antes de
+     * terminarlo. El id de la sesión retornada es siempre null.
      *
-     * @param request datos de la sesión — routineId obligatorio, gymId opcional
+     * @param routineId id de la rutina a simular — obligatorio
+     * @param gymId     id del gimnasio — opcional, null representa sesión sin gimnasio
+     * @return TrainingSessionDetailResponse simulado, con id null, sin persistir en base de datos
+     * @throws NotFoundException si gymId no existe o no pertenece al usuario autenticado
+     */
+    public TrainingSessionDetailResponse preview(Long routineId, Long gymId) {
+        User user = this.authUtils.getAuthenticatedUser();
+        return this.trainingSessionRepository.preview(user.getId(), routineId, gymId);
+    }
+
+    /**
+     * Persiste una sesión de entrenamiento completa tal como la envía el cliente —
+     * rutina, gimnasio, notas, ejercicios y sets ya decididos, típicamente a partir
+     * de lo que devolvió preview() y luego editado por el usuario durante el
+     * entrenamiento. No aplica ninguna lógica de fusión ni de copia: inserta
+     * exactamente lo recibido en el request.
+     *
+     * @param request datos completos de la sesión — routineId obligatorio, gymId/notes
+     *                opcionales, exercises con sus sets anidados
      * @return TrainingSessionDetailResponse con el detalle completo de la sesión creada
      */
     @Transactional
     public TrainingSessionDetailResponse save(TrainingSessionRequest request) {
         User user = this.authUtils.getAuthenticatedUser();
+        List<SessionExerciseRequest> exercises = request.exercises() != null ? request.exercises() : List.of();
         TrainingSessionDetailResponse session = this.trainingSessionRepository.save(user.getId(),
+                                                                                    request.routineId(),
                                                                                     request.gymId(),
-                                                                                    request.routineId());
-        LOG.info("Nueva sesión creada — sessionId: {}, userId: {}, routineId: {}",
-                session.id(), user.getId(), request.routineId());
+                                                                                    request.notes(),
+                                                                                    exercises);
+
+        int exerciseCount = exercises.size();
+        int setCount = exercises.stream()
+                                .mapToInt(e -> e.sets() != null ? e.sets().size() : 0)
+                                .sum();
+        LOG.info("Nueva sesión creada — sessionId: {}, userId: {}, routineId: {}, exercises: {}, sets: {}",
+                session.id(), user.getId(), request.routineId(), exerciseCount, setCount);
         return session;
     }
 
