@@ -36,3 +36,4 @@ build/
 .env
 start.sh
 deploy.sh
+db-deploy.sh

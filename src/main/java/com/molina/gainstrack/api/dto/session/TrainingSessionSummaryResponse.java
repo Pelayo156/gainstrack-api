@@ -7,4 +7,5 @@ import java.time.LocalDate;
 public record TrainingSessionSummaryResponse(Long id,
                                              GymResponse gym,
                                              LocalDate sessionDate,
+                                             Integer duration,
                                              String notes) {}

@@ -171,6 +171,8 @@ CREATE INDEX idx_routine_sets_routine_exercise_id
 -- routine_id NOT NULL: toda sesión pertenece a una rutina —
 --   sesiones libres se asocian a la rutina especial is_free = TRUE.
 -- gym_id NULL: el gym es opcional — se muestra "No especificado".
+-- duration: duración real de la sesión en minutos —
+--   el timer comienza automáticamente al iniciar la sesión.
 -- Las sesiones son inmutables una vez completadas — se controla
 -- a nivel de aplicación.
 -- Las sesiones se pueden mover entre rutinas actualizando routine_id.
@@ -184,15 +186,19 @@ CREATE TABLE training_sessions (
     routine_id   BIGINT    NOT NULL,
     gym_id       BIGINT    NULL,
     session_date DATE      NOT NULL,
+    duration     INT       NOT NULL,  -- duración en minutos
     notes        TEXT      NULL,
     created_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT pk_training_sessions PRIMARY KEY (id),
     CONSTRAINT fk_ts_user           FOREIGN KEY (user_id)
-                                    REFERENCES users(id) ON DELETE CASCADE,
+                                    REFERENCES users(id)
+                                    ON DELETE CASCADE,
     CONSTRAINT fk_ts_routine        FOREIGN KEY (routine_id)
-                                    REFERENCES routines(id) ON DELETE CASCADE,
+                                    REFERENCES routines(id)
+                                    ON DELETE CASCADE,
     CONSTRAINT fk_ts_gym            FOREIGN KEY (gym_id)
-                                    REFERENCES gyms(id) ON DELETE SET NULL
+                                    REFERENCES gyms(id)
+                                    ON DELETE SET NULL
 );
 
 -- Índice compuesto: optimiza consultas históricas por usuario + fecha
@@ -260,6 +266,8 @@ CREATE INDEX idx_sets_session_exercise_id ON sets(session_exercise_id);
 -- ============================================================
 
 SET FOREIGN_KEY_CHECKS = 0;
+
+SELECT * FROM users;
 
 DROP TABLE IF EXISTS gym_exercise_conversions;
 DROP TABLE IF EXISTS sets;

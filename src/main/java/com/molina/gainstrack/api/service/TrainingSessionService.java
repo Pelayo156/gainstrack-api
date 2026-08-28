@@ -75,13 +75,13 @@ public class TrainingSessionService {
 
     /**
      * Persiste una sesión de entrenamiento completa tal como la envía el cliente —
-     * rutina, gimnasio, notas, ejercicios y sets ya decididos, típicamente a partir
-     * de lo que devolvió preview() y luego editado por el usuario durante el
+     * rutina, gimnasio, duración, notas, ejercicios y sets ya decididos, típicamente
+     * a partir de lo que devolvió preview() y luego editado por el usuario durante el
      * entrenamiento. No aplica ninguna lógica de fusión ni de copia: inserta
      * exactamente lo recibido en el request.
      *
-     * @param request datos completos de la sesión — routineId obligatorio, gymId/notes
-     *                opcionales, exercises con sus sets anidados
+     * @param request datos completos de la sesión — routineId y duration obligatorios,
+     *                gymId/notes opcionales, exercises con sus sets anidados
      * @return TrainingSessionDetailResponse con el detalle completo de la sesión creada
      */
     @Transactional
@@ -91,6 +91,7 @@ public class TrainingSessionService {
         TrainingSessionDetailResponse session = this.trainingSessionRepository.save(user.getId(),
                                                                                     request.routineId(),
                                                                                     request.gymId(),
+                                                                                    request.duration(),
                                                                                     request.notes(),
                                                                                     exercises);
 
@@ -166,16 +167,16 @@ public class TrainingSessionService {
     }
 
     /**
-     * Actualiza las notas de una sesión del usuario autenticado.
-     * Solo modifica el campo notes — la fecha y rutina son inmutables.
+     * Actualiza las notas y/o la duración de una sesión del usuario autenticado.
+     * Solo modifica los campos enviados — la fecha y rutina son inmutables.
      *
      * @param id      id de la sesión a actualizar
-     * @param request datos a actualizar — solo notes
+     * @param request datos a actualizar — notes y/o duration, ambos opcionales
      * @throws NotFoundException si la sesión no existe
      */
     public void update(Long id, TrainingSessionNotesRequest request) {
         User user = this.authUtils.getAuthenticatedUser();
-        this.trainingSessionRepository.update(id, user.getId(), request.notes());
+        this.trainingSessionRepository.update(id, user.getId(), request.notes(), request.duration());
     }
 
     /**

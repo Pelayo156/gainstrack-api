@@ -17,6 +17,7 @@ import java.util.List;
  *
  * @param routineId id de la rutina ejecutada — obligatorio
  * @param gymId     id del gimnasio donde se realiza la sesión — opcional, puede ser null
+ * @param duration  duración de la sesión en minutos — obligatorio
  * @param notes     notas de la sesión — opcional
  * @param exercises ejercicios realizados con sus sets — opcional, null se trata como lista vacía
  */
@@ -25,6 +26,9 @@ public record TrainingSessionRequest(
         @Positive(message = "{field.positive}")
         Long routineId,
         Long gymId,
+        @NotNull(message = "{field.required}")
+        @Positive(message = "{field.positive}")
+        Integer duration,
         String notes,
         @Valid
         List<SessionExerciseRequest> exercises

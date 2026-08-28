@@ -12,11 +12,13 @@ import java.util.List;
  * @param id          identificador único de la sesión
  * @param gym         gimnasio donde se realizó la sesión
  * @param sessionDate fecha de la sesión
+ * @param duration    duración de la sesión en minutos
  * @param notes       notas opcionales de la sesión
  * @param exercises   lista de ejercicios realizados con sus sets
  */
 public record TrainingSessionDetailResponse(Long id,
                                             GymResponse gym,
                                             LocalDate sessionDate,
+                                            Integer duration,
                                             String notes,
                                             List<TrainingSessionExerciseResponse> exercises) {}

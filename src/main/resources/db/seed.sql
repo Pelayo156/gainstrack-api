@@ -344,28 +344,28 @@ INSERT INTO routine_sets (routine_exercise_id, set_number, weight, reps, notes) 
 -- 8. training_sessions
 -- Sesiones ejecutadas por John — últimas 4 semanas
 -- ------------------------------------------------------------
-INSERT INTO training_sessions (user_id, routine_id, gym_id, session_date, notes) VALUES
+INSERT INTO training_sessions (user_id, routine_id, gym_id, session_date, duration, notes) VALUES
 
 -- Semana 1
-(1, 2, 1, '2026-04-01', 'Subí peso en dominadas con lastre'),  -- id: 1 Espalda/Bíceps
-(1, 3, 1, '2026-04-02', 'Press banca llegué a 90kg x 8'),      -- id: 2 Pecho/Tríceps
-(1, 4, 2, '2026-04-04', 'Sentadilla bien — rodillas sin dolor'), -- id: 3 Piernas
-(1, 5, 2, '2026-04-05', 'Hombros cargados — buena sesión'),     -- id: 4 Hombros
+(1, 2, 1, '2026-04-01', 65, 'Subí peso en dominadas con lastre'),  -- id: 1 Espalda/Bíceps
+(1, 3, 1, '2026-04-02', 70, 'Press banca llegué a 90kg x 8'),      -- id: 2 Pecho/Tríceps
+(1, 4, 2, '2026-04-04', 80, 'Sentadilla bien — rodillas sin dolor'), -- id: 3 Piernas
+(1, 5, 2, '2026-04-05', 55, 'Hombros cargados — buena sesión'),     -- id: 4 Hombros
 
 -- Semana 2
-(1, 2, 1, '2026-04-08', 'Jalón con 70kg por primera vez'),     -- id: 5 Espalda/Bíceps
-(1, 3, 3, '2026-04-09', 'Pecho inclinado mejoró bastante'),    -- id: 6 Pecho/Tríceps
-(1, 4, 1, '2026-04-11', 'Prensa con 170kg — nuevo récord'),    -- id: 7 Piernas
-(1, 5, 1, '2026-04-12', 'Elevaciones laterales con 14kg'),     -- id: 8 Hombros
+(1, 2, 1, '2026-04-08', 60, 'Jalón con 70kg por primera vez'),     -- id: 5 Espalda/Bíceps
+(1, 3, 3, '2026-04-09', 68, 'Pecho inclinado mejoró bastante'),    -- id: 6 Pecho/Tríceps
+(1, 4, 1, '2026-04-11', 75, 'Prensa con 170kg — nuevo récord'),    -- id: 7 Piernas
+(1, 5, 1, '2026-04-12', 50, 'Elevaciones laterales con 14kg'),     -- id: 8 Hombros
 
 -- Semana 3
-(1, 2, 2, '2026-04-15', 'Remo con barra técnica mejorada'),    -- id: 9  Espalda/Bíceps
-(1, 3, 2, '2026-04-16', 'Aperturas con 22kg cada lado'),       -- id: 10 Pecho/Tríceps
-(1, 4, 3, '2026-04-18', 'Rumano con 95kg — espalda perfecta'), -- id: 11 Piernas
-(1, 5, 3, '2026-04-19', 'Face pull con más control'),          -- id: 12 Hombros
+(1, 2, 2, '2026-04-15', 62, 'Remo con barra técnica mejorada'),    -- id: 9  Espalda/Bíceps
+(1, 3, 2, '2026-04-16', 72, 'Aperturas con 22kg cada lado'),       -- id: 10 Pecho/Tríceps
+(1, 4, 3, '2026-04-18', 85, 'Rumano con 95kg — espalda perfecta'), -- id: 11 Piernas
+(1, 5, 3, '2026-04-19', 58, 'Face pull con más control'),          -- id: 12 Hombros
 
 -- Sesión libre
-(1, 1, 1, '2026-04-21', 'Sesión improvisada — solo pecho');    -- id: 13 Sesión Libre
+(1, 1, 1, '2026-04-21', 45, 'Sesión improvisada — solo pecho');    -- id: 13 Sesión Libre
 
 
 -- ------------------------------------------------------------

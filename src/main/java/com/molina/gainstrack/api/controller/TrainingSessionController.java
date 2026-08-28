@@ -137,10 +137,10 @@ public class TrainingSessionController {
     }
 
     /**
-     * Actualiza las notas de una sesión del usuario autenticado.
+     * Actualiza las notas y/o la duración de una sesión del usuario autenticado.
      *
      * @param id      id de la sesión a actualizar
-     * @param request body con notes — opcional
+     * @param request body con notes y/o duration — ambos opcionales
      * @return 204 No Content
      */
     @PatchMapping("/{id}")

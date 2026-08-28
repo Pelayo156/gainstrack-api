@@ -43,13 +43,14 @@ public class TrainingSessionRepository {
      * No incluye ejercicios ni sets — usar findById para el detalle completo.
      *
      * @param userId id del usuario autenticado
-     * @return lista de sesiones con sus datos de cabecera y gimnasio
+     * @return lista de sesiones con sus datos de cabecera, gimnasio y duración
      */
     public List<TrainingSessionSummaryResponse> findAll(Long userId) {
         return jdbcClient.sql("SELECT ts.id AS training_session_id, " +
                                       "g.id AS gym_id, " +
                                       "g.name AS gym_name, " +
                                       "ts.session_date AS training_session_date, " +
+                                      "ts.duration AS training_session_duration, " +
                                       "ts.notes AS training_session_notes " +
                               "FROM training_sessions ts " +
                               "LEFT JOIN gyms g ON ts.gym_id = g.id " +
@@ -67,6 +68,7 @@ public class TrainingSessionRepository {
                             gym,
                             rs.getDate("training_session_date")
                                     .toLocalDate(),
+                            rs.getInt("training_session_duration"),
                             rs.getString("training_session_notes")
                     );
                 })
@@ -88,6 +90,7 @@ public class TrainingSessionRepository {
                               "g.id AS gym_id, " +
                               "g.name AS gym_name, " +
                               "ts.session_date AS training_session_date, " +
+                              "ts.duration AS training_session_duration, " +
                               "ts.notes AS training_session_notes " +
                               "FROM training_sessions ts " +
                               "LEFT JOIN gyms g ON ts.gym_id = g.id " +
@@ -106,6 +109,7 @@ public class TrainingSessionRepository {
                             gym,
                             rs.getDate("training_session_date")
                                     .toLocalDate(),
+                            rs.getInt("training_session_duration"),
                             rs.getString("training_session_notes")
                     );
                 })
@@ -136,6 +140,7 @@ public class TrainingSessionRepository {
                               "g.id AS gym_id, " +
                               "g.name AS gym_name, " +
                               "ts.session_date AS training_session_date, " +
+                              "ts.duration AS training_session_duration, " +
                               "ts.notes AS training_session_notes " +
                               "FROM training_sessions ts " +
                               "LEFT JOIN gyms g ON ts.gym_id = g.id " +
@@ -156,6 +161,7 @@ public class TrainingSessionRepository {
                             gym,
                             rs.getDate("training_session_date")
                                     .toLocalDate(),
+                            rs.getInt("training_session_duration"),
                             rs.getString("training_session_notes")
                     );
                 })
@@ -180,11 +186,12 @@ public class TrainingSessionRepository {
      * durante el entrenamiento y recién al terminar envíe el resultado final a save() —
      * evita dejar sesiones huérfanas cuando el usuario abandona antes de terminar.
      * El id de la sesión retornada es siempre null, ya que no representa un registro real.
+     * La duración retornada es siempre 0, ya que no existe sesión persistida de la cual leerla.
      *
      * @param userId    id del usuario autenticado
      * @param routineId id de la rutina a simular — obligatorio
      * @param gymId     id del gimnasio — puede ser null
-     * @return TrainingSessionDetailResponse simulado, con id null, sin persistir nada
+     * @return TrainingSessionDetailResponse simulado, con id null y duration 0, sin persistir nada
      * @throws NotFoundException si gymId no existe o no pertenece al usuario autenticado
      */
     public TrainingSessionDetailResponse preview(Long userId, Long routineId, Long gymId) {
@@ -198,7 +205,7 @@ public class TrainingSessionRepository {
                 ? this.buildExercisesMergingRoutineAndLastSession(routineId, lastSessionId)
                 : this.buildExercisesFromRoutineTemplate(routineId);
 
-        return new TrainingSessionDetailResponse(null, gym, LocalDate.now(), notes, exercises);
+        return new TrainingSessionDetailResponse(null, gym, LocalDate.now(), 0, notes, exercises);
     }
 
     /**
@@ -484,19 +491,21 @@ public class TrainingSessionRepository {
      * @param userId    id del usuario autenticado
      * @param routineId id de la rutina ejecutada — obligatorio
      * @param gymId     id del gimnasio donde se realiza la sesión — puede ser null
+     * @param duration  duración de la sesión en minutos — obligatorio
      * @param notes     notas de la sesión — puede ser null
      * @param exercises ejercicios de la sesión con sus sets, ya definidos por el cliente
      * @return TrainingSessionDetailResponse con la sesión completa tal como fue recibida
      */
     @Transactional
-    public TrainingSessionDetailResponse save(Long userId, Long routineId, Long gymId, String notes,
-                                              List<SessionExerciseRequest> exercises) {
+    public TrainingSessionDetailResponse save(Long userId, Long routineId, Long gymId, Integer duration,
+                                              String notes, List<SessionExerciseRequest> exercises) {
         KeyHolder keyHolder = new GeneratedKeyHolder();
-        this.jdbcClient.sql("INSERT INTO training_sessions (user_id, routine_id, gym_id, session_date, notes) " +
-                            "VALUES (:userId, :routineId, :gymId, NOW(), :notes)")
+        this.jdbcClient.sql("INSERT INTO training_sessions (user_id, routine_id, gym_id, session_date, duration, notes) " +
+                            "VALUES (:userId, :routineId, :gymId, NOW(), :duration, :notes)")
                        .param("userId", userId)
                        .param("routineId", routineId)
                        .param("gymId", gymId)
+                       .param("duration", duration)
                        .param("notes", notes)
                        .update(keyHolder);
         Long sessionId = Objects.requireNonNull(keyHolder.getKey()).longValue();
@@ -547,6 +556,7 @@ public class TrainingSessionRepository {
                               "g.id AS gym_id, " +
                               "g.name AS gym_name, " +
                               "ts.session_date AS training_session_date, " +
+                              "ts.duration AS training_session_duration, " +
                               "ts.notes AS training_session_notes " +
                               "FROM training_sessions ts " +
                               "LEFT JOIN gyms g ON ts.gym_id = g.id " +
@@ -568,6 +578,7 @@ public class TrainingSessionRepository {
                             gym,
                             rs.getDate("training_session_date")
                                     .toLocalDate(),
+                            rs.getInt("training_session_duration"),
                             rs.getString("training_session_notes")
                     );
                 })
@@ -593,6 +604,7 @@ public class TrainingSessionRepository {
                               "g.id AS gym_id, " +
                               "g.name AS gym_name, " +
                               "ts.session_date AS session_date, " +
+                              "ts.duration AS session_duration, " +
                               "ts.notes AS session_notes " +
                               "FROM training_sessions ts " +
                               "LEFT JOIN gyms AS g ON ts.gym_id = g.id " +
@@ -661,6 +673,7 @@ public class TrainingSessionRepository {
                             gym,
                             rs.getDate("session_date")
                               .toLocalDate(),
+                            rs.getInt("session_duration"),
                             rs.getString("session_notes"),
                             sessionExercises
                     );
@@ -691,21 +704,24 @@ public class TrainingSessionRepository {
     }
 
     /**
-     * Actualiza las notas de una sesión de entrenamiento.
-     * Usa COALESCE para preservar el valor actual si notes llega null.
+     * Actualiza las notas y/o la duración de una sesión de entrenamiento.
+     * Usa COALESCE para preservar el valor actual de cada campo si llega null.
      * El userId garantiza que el usuario solo pueda editar sus propias sesiones.
      *
-     * @param id     id de la sesión a actualizar
-     * @param userId id del usuario propietario — previene edición de sesiones ajenas
-     * @param notes  nuevas notas — puede ser null para mantener las actuales
+     * @param id       id de la sesión a actualizar
+     * @param userId   id del usuario propietario — previene edición de sesiones ajenas
+     * @param notes    nuevas notas — puede ser null para mantener las actuales
+     * @param duration nueva duración en minutos — puede ser null para mantener la actual
      * @throws NotFoundException si la sesión no existe o no pertenece al usuario
      */
-    public void update(Long id, Long userId, String notes) {
+    public void update(Long id, Long userId, String notes, Integer duration) {
         int affectedRows = this.jdbcClient.sql("UPDATE training_sessions " +
-                                               "SET notes = COALESCE(:notes, notes) " +
+                                               "SET notes = COALESCE(:notes, notes), " +
+                                                   "duration = COALESCE(:duration, duration) " +
                                                "WHERE id = :id " +
                                                "AND user_id = :userId")
                                           .param("notes", notes)
+                                          .param("duration", duration)
                                           .param("id", id)
                                           .param("userId", userId)
                                           .update();

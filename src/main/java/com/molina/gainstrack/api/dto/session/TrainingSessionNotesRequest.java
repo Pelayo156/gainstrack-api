@@ -1,4 +1,4 @@
 package com.molina.gainstrack.api.dto.session;
 
-public record TrainingSessionNotesRequest(String notes) {
+public record TrainingSessionNotesRequest(String notes, Integer duration) {
 }
