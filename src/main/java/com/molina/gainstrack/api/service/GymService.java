@@ -53,6 +53,17 @@ public class GymService {
     }
 
     /**
+     * Actualiza el nombre de un gimnasio del usuario autenticado.
+     *
+     * @param id      id del gimnasio a editar
+     * @param request nuevos datos del gimnasio — nombre
+     */
+    public void update(Long id, GymRequest request) {
+        User user = this.authUtils.getAuthenticatedUser();
+        gymRepository.update(id, request.name(), user.getId());
+    }
+
+    /**
      * Elimina un gimnasio por su id.
      * Por el CASCADE del modelo relacional, se eliminarán también
      * todas las sesiones asociadas a este gimnasio.

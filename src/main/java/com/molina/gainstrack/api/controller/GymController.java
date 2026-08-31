@@ -48,6 +48,20 @@ public class GymController {
     }
 
     /**
+     * Actualiza el nombre de un gimnasio del usuario autenticado.
+     *
+     * @param id      id del gimnasio a editar
+     * @param request body con el nuevo nombre del gimnasio
+     * @return 204 No Content
+     */
+    @PatchMapping("/{id}")
+    public ResponseEntity<Void> update(@PathVariable("id") Long id,
+                                       @Valid @RequestBody GymRequest request) {
+        gymService.update(id, request);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
      * Elimina un gimnasio por su id.
      * Advertencia: elimina también todas las sesiones asociadas.
      *

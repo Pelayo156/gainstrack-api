@@ -60,6 +60,26 @@ public class GymRepository {
     }
 
     /**
+     * Actualiza el nombre de un gimnasio del usuario autenticado.
+     * El userId garantiza que el usuario solo pueda editar sus propios gimnasios.
+     *
+     * @param id     id del gimnasio a editar
+     * @param name   nuevo nombre del gimnasio
+     * @param userId id del usuario propietario — previene edición de gimnasios ajenos
+     */
+    public void update(Long id, String name, Long userId) {
+        int affectedRows = jdbcClient.sql("UPDATE gyms SET name = :name WHERE id = :id AND user_id = :userId")
+                                     .param("name", name)
+                                     .param("id", id)
+                                     .param("userId", userId)
+                                     .update();
+
+        if (affectedRows == 0) {
+            throw new NotFoundException("Gimnasio no encontrado");
+        }
+    }
+
+    /**
      * Elimina un gimnasio por su id.
      * Por el CASCADE definido en el DDL, se eliminarán también
      * todas las sesiones de entrenamiento asociadas a este gimnasio.
